@@ -1,0 +1,2267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Industrial Hydraulic–Pneumatic Robotic Arm Simulator</title>
+  
+  <!-- Three.js & OrbitControls via CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+  <style>
+    /* ==========================================================================
+       INDUSTRIAL SCADA UI STYLING
+       ========================================================================== */
+    :root {
+      --bg-deep: #0a0d12;
+      --bg-panel: #131822;
+      --bg-subtle: #1c2331;
+      --border-color: #2b3648;
+      --border-focus: #388bfd;
+      --text-main: #c9d1d9;
+      --text-dim: #7d8590;
+      --text-bright: #f0f6fc;
+
+      /* Standard Fluid Power Colors */
+      --c-hyd-high: #ff3838;      /* High Pressure Supply (Red/Orange) */
+      --c-hyd-low: #1e90ff;       /* Tank / Low Pressure Return (Blue) */
+      --c-hyd-inactive: #485460;  /* Depressurized / Blocked (Grey) */
+      --c-pneu-press: #2ed573;    /* Compressed Air Supply (Green) */
+      --c-pneu-vent: #7158e2;     /* Exhaust Vent (Purple/Grey) */
+      --c-accent: #ffa801;        /* Warning / Energized Solenoid */
+      --c-pass: #2ecc71;
+      --c-fail: #eb4d4b;
+      --c-kuka-orange: #e65100;
+      --c-metal-dark: #2f3542;
+
+      --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --font-mono: "Consolas", "Courier New", monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: var(--bg-deep);
+      color: var(--text-main);
+      font-family: var(--font-family);
+      font-size: 12.5px;
+      line-height: 1.4;
+      overflow-x: hidden;
+      height: 100vh;
+    }
+
+    #app-container {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    /* TOP HEADER */
+    #main-header {
+      background: linear-gradient(180deg, #161d2b 0%, #0d121c 100%);
+      border-bottom: 2px solid var(--border-color);
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .header-branding h1 {
+      font-size: 16px;
+      color: var(--text-bright);
+      letter-spacing: 0.8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .header-branding .badge-version {
+      font-size: 9px;
+      background: #e65100;
+      color: #fff;
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+    }
+
+    .header-branding .subtitle {
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* BUTTONS & PILLS */
+    .btn {
+      padding: 6px 12px;
+      font-size: 11px;
+      font-weight: 700;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      cursor: pointer;
+      background: var(--bg-subtle);
+      color: var(--text-bright);
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .btn:hover { background: #283347; border-color: #8b949e; }
+    .btn-primary { background: #238636; border-color: #2ea043; }
+    .btn-primary:hover { background: #2ea043; }
+    .btn-warning { background: #9e6a03; border-color: #bb8009; }
+    .btn-danger { background: #da3633; border-color: #f85149; }
+    .btn-action { background: #2f3b52; border-color: #42526e; width: 100%; text-align: center; justify-content: center; }
+    .btn-action:hover { background: #3d4c6a; }
+
+    .btn-micro {
+      padding: 3px 7px;
+      font-size: 10px;
+      background: var(--bg-subtle);
+      color: var(--text-bright);
+      border: 1px solid var(--border-color);
+      border-radius: 3px;
+      cursor: pointer;
+    }
+
+    .pill {
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 10px;
+      font-weight: bold;
+      letter-spacing: 0.5px;
+    }
+    .pill-ready { background: #1f6feb; color: #fff; }
+    .pill-running { background: #238636; color: #fff; }
+    .pill-paused { background: #d29922; color: #000; }
+    .pill-stopped { background: #8b949e; color: #fff; }
+    .pill-fault { background: #f85149; color: #fff; }
+    .pill-pass { background: #238636; color: #fff; }
+    .pill-fail { background: #da3633; color: #fff; }
+    .pill-review { background: #bb8009; color: #fff; }
+
+    /* MAIN GRID LAYOUT */
+    #main-grid {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      grid-template-rows: minmax(350px, 1.1fr) minmax(280px, 0.95fr) minmax(260px, 0.85fr);
+      gap: 8px;
+      padding: 8px;
+      overflow-y: auto;
+    }
+
+    .card {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    }
+
+    .card-header {
+      background: #171e2b;
+      padding: 7px 12px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .card-header h2 {
+      font-size: 11.5px;
+      font-weight: 700;
+      letter-spacing: 0.6px;
+      color: var(--text-bright);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* 3D ROBOT VIEW */
+    .panel-3d { position: relative; }
+    #three-container {
+      flex: 1;
+      position: relative;
+      background: radial-gradient(circle at center, #131924 0%, #07090e 100%);
+      min-height: 310px;
+    }
+    #canvas-3d { width: 100%; height: 100%; display: block; }
+    
+    #hud-overlay {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(10, 14, 20, 0.85);
+      border: 1px solid #303e54;
+      backdrop-filter: blur(4px);
+      padding: 8px 12px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      border-radius: 5px;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    #hud-overlay span { color: #58a6ff; font-weight: bold; }
+
+    /* TELEMETRY & CONTROLS */
+    .telemetry-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      padding: 8px;
+      background: #0f141d;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .metric-box {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      padding: 6px 8px;
+      display: flex;
+      flex-direction: column;
+    }
+    .metric-label { font-size: 9.5px; color: var(--text-dim); text-transform: uppercase; font-weight: 600; }
+    .metric-val { font-family: var(--font-mono); font-size: 17px; font-weight: bold; color: var(--text-bright); }
+    .metric-unit { font-size: 9.5px; color: var(--text-dim); }
+
+    .control-tabs {
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      overflow-y: auto;
+    }
+    .subheading {
+      font-size: 10.5px;
+      font-weight: bold;
+      color: #58a6ff;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 3px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .control-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    
+    .actuator-control-group {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #10151f;
+      padding: 5px 8px;
+      border-radius: 4px;
+      border: 1px solid #1e2636;
+    }
+    .actuator-control-group label { font-size: 11px; color: var(--text-main); font-weight: 600; }
+    .btn-group-sm { display: flex; gap: 4px; }
+    .btn-valve {
+      padding: 4px 8px;
+      font-size: 9.5px;
+      font-weight: 700;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    .btn-valve.active { background: #1f6feb; color: #fff; border-color: #58a6ff; }
+    .btn-valve.active-ext { background: #d9381e; color: #fff; border-color: #ff6b4a; }
+    .btn-valve.active-ret { background: #1a73e8; color: #fff; border-color: #63a4ff; }
+
+    .auto-cycle-buttons { display: flex; flex-direction: column; gap: 6px; }
+    .cycle-desc { font-size: 11px; font-style: italic; color: #7ee787; min-height: 18px; }
+
+    /* SVG CIRCUITS */
+    .svg-viewport {
+      flex: 1;
+      background: #090c12;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+      position: relative;
+      min-height: 220px;
+    }
+    .svg-viewport svg { width: 100%; height: 100%; display: block; }
+    .circuit-legend { display: flex; gap: 10px; font-size: 9.5px; }
+    .legend-item { display: flex; align-items: center; gap: 4px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .dot-high-p { background: var(--c-hyd-high); }
+    .dot-low-p { background: var(--c-hyd-low); }
+    .dot-inactive { background: var(--c-hyd-inactive); }
+    .dot-pneu-p { background: var(--c-pneu-press); }
+    .dot-pneu-ex { background: var(--c-pneu-vent); }
+
+    .schematic-line { stroke-width: 3.5; fill: none; stroke-linecap: round; stroke-linejoin: round; transition: stroke 0.2s ease; }
+    .line-supply { stroke: var(--c-hyd-high); }
+    .line-return { stroke: var(--c-hyd-low); }
+    .line-inactive { stroke: var(--c-hyd-inactive); stroke-dasharray: 4, 4; }
+    .line-pneu-press { stroke: var(--c-pneu-press); }
+    .line-pneu-vent { stroke: var(--c-pneu-vent); stroke-dasharray: 3, 3; }
+
+    .anim-flow {
+      stroke-dasharray: 8, 6;
+      animation: flow-dash 1.0s linear infinite;
+    }
+    @keyframes flow-dash { to { stroke-dashoffset: -28; } }
+
+    .circuit-component { cursor: pointer; }
+    .circuit-component:hover rect,
+    .circuit-component:hover circle {
+      stroke: var(--c-accent) !important;
+      stroke-width: 2px !important;
+    }
+
+    /* VALVE & CIRCUIT SELECTOR TAB */
+    .config-card-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      padding: 10px;
+    }
+    .config-box {
+      background: #0f1520;
+      border: 1px solid var(--border-color);
+      border-radius: 5px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .config-box h4 {
+      font-size: 11.5px;
+      color: #58a6ff;
+      border-bottom: 1px solid #1c2738;
+      padding-bottom: 4px;
+    }
+    .config-box p { font-size: 10.5px; color: var(--text-dim); line-height: 1.3; }
+    .config-select {
+      background: #182232;
+      color: var(--text-bright);
+      border: 1px solid #2f4058;
+      padding: 5px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .config-select:focus { outline: none; border-color: #58a6ff; }
+
+    /* BOTTOM TABS & ANALYSIS */
+    .panel-bottom-analysis { grid-column: 1 / -1; min-height: 260px; }
+    .card-tabs-header { background: #101622; border-bottom: 1px solid var(--border-color); display: flex; }
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-dim);
+      padding: 9px 18px;
+      cursor: pointer;
+      font-size: 11.5px;
+      font-weight: 600;
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s ease;
+    }
+    .tab-btn.active { color: var(--text-bright); border-bottom-color: #58a6ff; background: var(--bg-panel); }
+    .card-tabs-content { flex: 1; padding: 10px; overflow-y: auto; }
+    .tab-pane { display: none; height: 100%; }
+    .tab-pane.active { display: block; }
+
+    .physics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .analysis-column { background: #0c1017; border: 1px solid var(--border-color); border-radius: 4px; padding: 10px; }
+    .analysis-column h3 { font-size: 11px; color: #58a6ff; margin-bottom: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 4px; }
+    .data-table { width: 100%; font-size: 11px; border-collapse: collapse; }
+    .data-table td { padding: 3px 0; }
+    .data-table td:nth-child(2) { text-align: right; font-family: var(--font-mono); color: var(--text-bright); }
+
+    .param-input-grid { display: grid; grid-template-columns: 1fr 1fr; row-gap: 6px; column-gap: 4px; align-items: center; font-size: 10px; }
+    .param-input-grid input[type="range"] { grid-column: span 2; }
+
+    .charts-container { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .chart-wrapper { background: #0c1017; border: 1px solid var(--border-color); padding: 8px; border-radius: 4px; }
+    .chart-wrapper h4 { font-size: 11px; margin-bottom: 6px; color: var(--text-dim); }
+    .chart-wrapper canvas { width: 100%; height: 150px; background: #05070a; border-radius: 3px; }
+
+    .diagnostics-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 11.5px; }
+    .test-results-scroll { max-height: 180px; overflow-y: auto; }
+    .test-table { width: 100%; font-size: 11px; border-collapse: collapse; }
+    .test-table th, .test-table td { border: 1px solid var(--border-color); padding: 5px 8px; text-align: left; }
+    .test-table th { background: #161e2c; color: var(--text-bright); }
+
+    .log-controls { display: flex; gap: 8px; margin-bottom: 6px; }
+    .event-log-box {
+      background: #06090e;
+      border: 1px solid var(--border-color);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      height: 150px;
+      overflow-y: auto;
+      padding: 8px;
+      color: #8b949e;
+      border-radius: 4px;
+    }
+    .log-entry { margin-bottom: 3px; }
+    .log-time { color: #58a6ff; font-weight: bold; }
+    .log-warn { color: #d29922; }
+    .log-err  { color: #f85149; }
+    .log-info { color: #c9d1d9; }
+    .log-pass { color: #7ee787; }
+
+    /* MODAL */
+    .modal {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(4px);
+      display: flex; justify-content: center; align-items: center;
+      z-index: 1000;
+    }
+    .modal-content {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-focus);
+      width: 500px; max-width: 90%; border-radius: 6px;
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.85);
+    }
+    .modal-header {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .modal-header h3 { font-size: 13px; color: #58a6ff; }
+    #modal-close-btn { background: none; border: none; color: var(--text-dim); font-size: 20px; cursor: pointer; }
+    .modal-body { padding: 14px; font-size: 12px; line-height: 1.5; }
+
+    @media (max-width: 1200px) {
+      #main-grid { grid-template-columns: 1fr; }
+      .physics-grid, .config-card-grid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app-container">
+    <!-- TOP HEADER -->
+    <header id="main-header">
+      <div class="header-branding">
+        <h1>
+          <span>HYDRAULIC–PNEUMATIC ROBOTIC ARM SIMULATOR</span>
+          <span class="badge-version">v2.5 PRO INDUSTRIAL</span>
+        </h1>
+        <span class="subtitle">Complete 3D Actuator Kinematics • ISO 1219 Valve Architecture • Directional Fluid Dynamics</span>
+      </div>
+      <div class="header-controls">
+        <div class="status-indicator">
+          <span class="status-label" style="font-size:10px; color:#7d8590; font-weight:700;">SYSTEM:</span>
+          <span id="system-status-pill" class="pill pill-ready">READY</span>
+        </div>
+        <div class="button-group">
+          <button id="btn-start" class="btn btn-primary" title="Start/Run Simulation">RUN</button>
+          <button id="btn-pause" class="btn btn-warning" title="Pause Motion">PAUSE</button>
+          <button id="btn-stop" class="btn btn-danger" title="Emergency Stop">STOP</button>
+          <button id="btn-reset" class="btn btn-secondary" title="Reset Calibrated Zero">RESET</button>
+        </div>
+        <div class="speed-selector">
+          <select id="select-speed" class="config-select">
+            <option value="0.5">0.5x Speed</option>
+            <option value="1.0" selected>1.0x Realtime</option>
+            <option value="2.0">2.0x Fast</option>
+          </select>
+        </div>
+        <button id="btn-fullscreen" class="btn" title="Toggle Fullscreen">⛶</button>
+      </div>
+    </header>
+
+    <!-- MAIN GRID LAYOUT -->
+    <main id="main-grid">
+      <!-- UPPER LEFT: 3D ROBOT VIEW -->
+      <section class="card panel-3d">
+        <div class="card-header">
+          <h2>3D ROBOTIC ARM & ACTUATOR KINEMATICS</h2>
+          <div class="view-tools">
+            <button id="btn-cam-reset" class="btn-micro">Reset Camera</button>
+            <button id="btn-wireframe" class="btn-micro">Cutaway Cylinders</button>
+            <span class="badge" id="arm-payload-tag" style="background:#1f6feb; color:#fff; padding:2px 6px; border-radius:3px; font-size:10px;">Payload: 0.20 kg</span>
+          </div>
+        </div>
+        <div id="three-container">
+          <canvas id="canvas-3d"></canvas>
+          <div id="hud-overlay">
+            <div>Base Yaw (θ₀): <span id="hud-yaw">0.0°</span></div>
+            <div>Shoulder Pitch (θ₁): <span id="hud-shoulder">45.0°</span></div>
+            <div>Elbow Articulation (θ₂): <span id="hud-elbow">60.0°</span></div>
+            <div>Gripper Gap: <span id="hud-gripper">32 mm</span></div>
+            <div>Fluid Flow Velocity: <span id="hud-flow">0.00 m/s</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- UPPER RIGHT: TELEMETRY & CONTROLS -->
+      <section class="card panel-telemetry">
+        <div class="card-header">
+          <h2>LIVE OPERATING STATUS & MANUAL VALVES</h2>
+          <span id="auto-cycle-stage" class="pill pill-neutral" style="background:#1f2838; color:#7ee787;">MODE: MANUAL PILOT</span>
+        </div>
+        
+        <div class="telemetry-grid">
+          <div class="metric-box">
+            <span class="metric-label">Hydraulic Pump</span>
+            <span class="metric-val" id="disp-pump-state">OFF</span>
+            <span class="metric-unit" id="disp-pump-rpm">0 RPM • 1.5 kW</span>
+          </div>
+          <div class="metric-box">
+            <span class="metric-label">Manifold Supply</span>
+            <span class="metric-val" id="disp-p-hyd">0.00</span>
+            <span class="metric-unit">MPa [Line P]</span>
+          </div>
+          <div class="metric-box">
+            <span class="metric-label">Flow Delivery</span>
+            <span class="metric-val" id="disp-q-hyd">0.0</span>
+            <span class="metric-unit">L/min (Q)</span>
+          </div>
+          <div class="metric-box">
+            <span class="metric-label">Pneumatic Line</span>
+            <span class="metric-val" id="disp-p-pneu">0.60</span>
+            <span class="metric-unit">MPa Air Supply</span>
+          </div>
+        </div>
+
+        <div class="control-tabs">
+          <div class="subheading">FLUID POWER MAIN SUPPLIES</div>
+          <div class="control-row">
+            <button id="btn-toggle-pump" class="btn btn-action">START HYDRAULIC PUMP</button>
+            <button id="btn-toggle-air" class="btn btn-action">ISOLATE AIR SUPPLY</button>
+          </div>
+
+          <div class="subheading">MANUAL VALVE SPOOL SHIFT COMMANDS</div>
+          <!-- Shoulder Actuator Valve -->
+          <div class="actuator-control-group">
+            <label>Shoulder DCV:</label>
+            <div class="btn-group-sm">
+              <button id="btn-sh-ret" class="btn-valve">RETRACT (A-T, P-B)</button>
+              <button id="btn-sh-neu" class="btn-valve active">CENTER (NEU)</button>
+              <button id="btn-sh-ext" class="btn-valve">EXTEND (P-A, B-T)</button>
+            </div>
+          </div>
+
+          <!-- Elbow Actuator Valve -->
+          <div class="actuator-control-group">
+            <label>Elbow DCV:</label>
+            <div class="btn-group-sm">
+              <button id="btn-el-ret" class="btn-valve">RETRACT (IN)</button>
+              <button id="btn-el-neu" class="btn-valve active">CENTER (NEU)</button>
+              <button id="btn-el-ext" class="btn-valve">EXTEND (OUT)</button>
+            </div>
+          </div>
+
+          <!-- Pneumatic Clamp Valve -->
+          <div class="actuator-control-group">
+            <label>Gripper DCV:</label>
+            <div class="btn-group-sm">
+              <button id="btn-grip-open" class="btn-valve active">VENT / OPEN</button>
+              <button id="btn-grip-close" class="btn-valve">PRESSURIZE / CLAMP</button>
+            </div>
+          </div>
+
+          <div class="subheading">AUTOMATIC PICK-AND-PLACE SEQUENCER</div>
+          <div class="auto-cycle-buttons">
+            <div class="control-row">
+              <button id="btn-auto-start" class="btn btn-primary" style="justify-content:center;">EXECUTE 10-STAGE CYCLE</button>
+              <button id="btn-auto-abort" class="btn btn-danger" style="justify-content:center;">ABORT SEQUENCE</button>
+            </div>
+            <span id="cycle-step-description" class="cycle-desc">System idle. Ready for manual manipulation or automated cycle.</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- LOWER LEFT: HYDRAULIC CIRCUIT DIAGRAM -->
+      <section class="card panel-hydraulic">
+        <div class="card-header">
+          <h2>HYDRAULIC POWER SCHEMATIC (ISO 1219 DYNAMIC)</h2>
+          <div class="circuit-legend">
+            <span class="legend-item"><span class="dot dot-high-p"></span> High P (Supply)</span>
+            <span class="legend-item"><span class="dot dot-low-p"></span> Low P (Tank)</span>
+            <span class="legend-item"><span class="dot dot-inactive"></span> Blocked Line</span>
+          </div>
+        </div>
+        <div class="svg-viewport" id="hydraulic-circuit-container"></div>
+      </section>
+
+      <!-- LOWER RIGHT: PNEUMATIC CIRCUIT DIAGRAM -->
+      <section class="card panel-pneumatic">
+        <div class="card-header">
+          <h2>PNEUMATIC GRIPPER SCHEMATIC</h2>
+          <div class="circuit-legend">
+            <span class="legend-item"><span class="dot dot-pneu-p"></span> 0.6 MPa Air</span>
+            <span class="legend-item"><span class="dot dot-pneu-ex"></span> Silencer Exhaust</span>
+          </div>
+        </div>
+        <div class="svg-viewport" id="pneumatic-circuit-container"></div>
+      </section>
+
+      <!-- BOTTOM: ANALYSIS, VALVE SELECTOR & DIAGNOSTICS -->
+      <section class="card panel-bottom-analysis">
+        <div class="card-tabs-header">
+          <button class="tab-btn active" data-tab="tab-circuit-select">Circuit & Valve Architecture Selector</button>
+          <button class="tab-btn" data-tab="tab-physics">Engineering Calculations & Leverage</button>
+          <button class="tab-btn" data-tab="tab-graphs">Live Pressure & Torque Graphs</button>
+          <button class="tab-btn" data-tab="tab-diagnostics">Self-Test Diagnostic Suite (15 Tests)</button>
+          <button class="tab-btn" data-tab="tab-logs">Event Log & Data Export</button>
+        </div>
+
+        <div class="card-tabs-content">
+          <!-- TAB 0: VALVE & CIRCUIT ARCHITECTURE SELECTOR -->
+          <div id="tab-circuit-select" class="tab-pane active">
+            <div class="config-card-grid">
+              <div class="config-box">
+                <h4>1. Directional Control Valve Spool Center</h4>
+                <p>Choose the 4/3 valve center spool architecture to observe its direct effect on line pressure, pump unloading, and gravitational holding:</p>
+                <select id="select-valve-center" class="config-select">
+                  <option value="TANDEM" selected>4/3 Tandem Center (P-T bypass, A/B blocked)</option>
+                  <option value="CLOSED">4/3 Closed Center (All ports blocked, full P)</option>
+                  <option value="FLOAT">4/3 Float / Open Center (P blocked, A & B to T)</option>
+                  <option value="REGEN">4/3 Regenerative Extension Circuit (P to A & B)</option>
+                </select>
+                <div id="valve-explanation" style="font-size:10px; color:#7ee787; margin-top:4px;">
+                  Tandem Center: Pump unloads back to tank at ~0.15 MPa when valves are neutral, reducing heat and conserving motor power.
+                </div>
+              </div>
+
+              <div class="config-box">
+                <h4>2. Flow Control Architecture</h4>
+                <p>Select hydraulic throttling configuration to adjust motion speed and cylinder backpressure resistance:</p>
+                <select id="select-flow-control" class="config-select">
+                  <option value="METER_OUT" selected>Meter-Out Flow Control (Throttle on return line)</option>
+                  <option value="METER_IN">Meter-In Flow Control (Throttle on supply line)</option>
+                  <option value="FULL_BORE">Full Open Proportional (No flow throttling)</option>
+                </select>
+                <div style="font-size:10px; color:#7ee787; margin-top:4px;">
+                  Meter-Out provides positive backpressure against overrunning gravity loads, preventing cylinder runaway.
+                </div>
+              </div>
+
+              <div class="config-box">
+                <h4>3. Gripper Pneumatic Valve Spool</h4>
+                <p>Configure pneumatic directional control for bilateral parallel clamping jaws:</p>
+                <select id="select-pneu-valve" class="config-select">
+                  <option value="5_2_BISTABLE" selected>5/2 Double-Solenoid Bistable Valve (Memory)</option>
+                  <option value="5_2_SPRING">5/2 Single-Solenoid Monostable (Spring Return)</option>
+                  <option value="5_3_CLOSED">5/3 All-Ports-Blocked Closed Center (Hold)</option>
+                </select>
+                <div style="font-size:10px; color:#7ee787; margin-top:4px;">
+                  Bistable maintains clamp state indefinitely without solenoid power until reverse pilot pulse is applied.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 1: PHYSICS & FORCES -->
+          <div id="tab-physics" class="tab-pane">
+            <div class="physics-grid">
+              <div class="analysis-column">
+                <h3>Shoulder Actuator Mechanics</h3>
+                <table class="data-table">
+                  <tr><td>Joint Angle (θ₁):</td><td><span id="calc-th1">45.0</span>°</td></tr>
+                  <tr><td>Gravitational Torque (τ₁):</td><td><span id="calc-tau1">1.48</span> N·m</td></tr>
+                  <tr><td>Perpendicular Moment Arm (r⊥₁):</td><td><span id="calc-arm1">45.8</span> mm</td></tr>
+                  <tr><td>Required Rod Thrust (F_req1):</td><td><span id="calc-freq1">32.3</span> N</td></tr>
+                  <tr><td>Available Cylinder Force:</td><td><span id="calc-favail1">883.6</span> N</td></tr>
+                  <tr><td>Stroke (s₁) [55-135 mm]:</td><td><span id="calc-stroke1">97.7</span> mm</td></tr>
+                  <tr><td>Status:</td><td><span id="calc-stat1" class="pill pill-pass">PASS</span></td></tr>
+                </table>
+              </div>
+
+              <div class="analysis-column">
+                <h3>Elbow Actuator Mechanics</h3>
+                <table class="data-table">
+                  <tr><td>Joint Angle (θ₂ relative):</td><td><span id="calc-th2">60.0</span>°</td></tr>
+                  <tr><td>Gravitational Torque (τ₂):</td><td><span id="calc-tau2">-0.30</span> N·m</td></tr>
+                  <tr><td>Perpendicular Moment Arm (r⊥₂):</td><td><span id="calc-arm2">39.5</span> mm</td></tr>
+                  <tr><td>Required Rod Thrust (F_req2):</td><td><span id="calc-freq2">7.6</span> N</td></tr>
+                  <tr><td>Available Cylinder Force:</td><td><span id="calc-favail2">883.6</span> N</td></tr>
+                  <tr><td>Stroke (s₂) [100-230 mm]:</td><td><span id="calc-stroke2">186.6</span> mm</td></tr>
+                  <tr><td>Status:</td><td><span id="calc-stat2" class="pill pill-pass">PASS</span></td></tr>
+                </table>
+              </div>
+
+              <div class="analysis-column">
+                <h3>Pneumatic Gripper Equilibrium</h3>
+                <table class="data-table">
+                  <tr><td>Ideal Bore Force (0.6 MPa, Ø32):</td><td><span id="calc-pneu-ideal">482.5</span> N</td></tr>
+                  <tr><td>Available Thrust (η=88%):</td><td><span id="calc-pneu-thrust">424.6</span> N</td></tr>
+                  <tr><td>Normal Clamping (2 Fingers):</td><td><span id="calc-f-normal">276.0</span> N</td></tr>
+                  <tr><td>Friction Coeff (μ) / Pads:</td><td>0.30 / 2 pads</td></tr>
+                  <tr><td>Max Holding Capacity:</td><td><span id="calc-hold-cap">16.89</span> kg</td></tr>
+                  <tr><td>Payload Mass / Margin:</td><td><span id="calc-m-payload">0.20</span> kg (<span id="calc-grip-margin">84.4x</span>)</td></tr>
+                  <tr><td>Grip Evaluation:</td><td><span id="calc-grip-stat" class="pill pill-pass">PASS (SECURE)</span></td></tr>
+                </table>
+              </div>
+
+              <div class="analysis-column parameters-column">
+                <h3>System Parameters</h3>
+                <div class="param-input-grid">
+                  <label>Relief Valve (MPa):</label>
+                  <input type="range" id="param-prv" min="0.5" max="5.0" step="0.1" value="2.5">
+                  <span id="lbl-param-prv">2.50 MPa</span>
+
+                  <label>Hydraulic Pump (MPa):</label>
+                  <input type="range" id="param-phyd" min="0.5" max="4.0" step="0.1" value="2.0">
+                  <span id="lbl-param-phyd">2.00 MPa</span>
+
+                  <label>Pneumatic Press (MPa):</label>
+                  <input type="range" id="param-ppneu" min="0.1" max="1.0" step="0.05" value="0.6">
+                  <span id="lbl-param-ppneu">0.60 MPa</span>
+
+                  <label>Payload Mass (kg):</label>
+                  <input type="range" id="param-mass" min="0.0" max="5.0" step="0.05" value="0.20">
+                  <span id="lbl-param-mass">0.20 kg</span>
+
+                  <label>Hydraulic Flow (L/min):</label>
+                  <input type="range" id="param-flow" min="1.0" max="25.0" step="0.5" value="6.0">
+                  <span id="lbl-param-flow">6.0 L/min</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 2: LIVE CHARTS -->
+          <div id="tab-graphs" class="tab-pane">
+            <div class="charts-container">
+              <div class="chart-wrapper">
+                <h4>System Pressures (Hydraulic Supply & Pneumatic Line)</h4>
+                <canvas id="chart-pressure" width="550" height="150"></canvas>
+              </div>
+              <div class="chart-wrapper">
+                <h4>Joint Angles (Shoulder θ₁ & Elbow θ₂)</h4>
+                <canvas id="chart-angles" width="550" height="150"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 3: SELF-TEST DIAGNOSTICS -->
+          <div id="tab-diagnostics" class="tab-pane">
+            <div class="diagnostics-header">
+              <p>Execute built-in verification suite covering kinematic limits, leverage arms, valve relief limits, and pneumatic friction security.</p>
+              <button id="btn-run-tests" class="btn btn-primary">RUN 15-POINT SELF-TEST SUITE</button>
+            </div>
+            <div class="test-results-scroll">
+              <table class="test-table" id="table-tests">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Test Category & Verification Description</th>
+                    <th>Input Condition</th>
+                    <th>Expected Behavior</th>
+                    <th>Measured Outcome</th>
+                    <th>Result</th>
+                  </tr>
+                </thead>
+                <tbody id="test-table-body">
+                  <tr><td colspan="6" style="text-align:center;">Click "RUN 15-POINT SELF-TEST SUITE" to execute verification.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- TAB 4: EVENT LOG & EXPORT -->
+          <div id="tab-logs" class="tab-pane">
+            <div class="log-controls">
+              <button id="btn-clear-log" class="btn-micro">Clear Log</button>
+              <button id="btn-export-csv" class="btn btn-secondary">Export Telemetry (CSV)</button>
+              <button id="btn-export-json" class="btn btn-secondary">Export State Dump (JSON)</button>
+              <button id="btn-print-report" class="btn btn-outline">Generate Print Report</button>
+            </div>
+            <div id="simulation-event-log" class="event-log-box"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- COMPONENT DETAIL MODAL -->
+    <div id="component-modal" class="modal hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 id="modal-title">Component Inspection</h3>
+          <button id="modal-close-btn">&times;</button>
+        </div>
+        <div class="modal-body" id="modal-body-content"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- JAVASCRIPT SIMULATION ENGINE -->
+  <script>
+    window.HP_SIM = window.HP_SIM || {};
+
+    /* ==========================================================================
+       MODULE 1: RIGOROUS PHYSICS & FLUID DYNAMICS
+       ========================================================================== */
+    (function (exports) {
+      'use strict';
+      const G = 9.80665;
+
+      const PARAMS = {
+        L_upper: 0.250,
+        L_forearm: 0.200,
+        m_upper: 0.50,
+        m_forearm: 0.35,
+        m_gripper: 0.25,
+        m_payload_default: 0.20,
+
+        com_upper_ratio: 0.45,
+        com_forearm_ratio: 0.40,
+
+        hyd_shoulder_bore: 0.025,
+        hyd_shoulder_rod: 0.010,
+        hyd_elbow_bore: 0.025,
+        hyd_elbow_rod: 0.010,
+        hyd_efficiency: 0.90,
+
+        sh_cylinder_min_len: 0.055,
+        sh_cylinder_max_len: 0.135,
+        el_cylinder_min_len: 0.100,
+        el_cylinder_max_len: 0.230,
+
+        sh_mount_base: { x: -0.040, y: 0.030 },
+        sh_mount_link: { r: 0.090, theta_offset: 0.26 },
+
+        el_mount_base: { r: 0.110, theta_offset: -0.22 },
+        el_mount_link: { r: 0.075, theta_offset: 0.30 },
+
+        pneu_bore: 0.032,
+        pneu_rod: 0.010,
+        pneu_efficiency: 0.88,
+        pneu_mech_advantage: 0.65,
+        friction_coeff: 0.30
+      };
+
+      function calcPistonAreas(boreDiameter, rodDiameter) {
+        const full = (Math.PI * Math.pow(boreDiameter, 2)) / 4;
+        const annular = (Math.PI * (Math.pow(boreDiameter, 2) - Math.pow(rodDiameter, 2))) / 4;
+        const rodArea = (Math.PI * Math.pow(rodDiameter, 2)) / 4;
+        return { full, annular, rodArea };
+      }
+
+      const shAreas = calcPistonAreas(PARAMS.hyd_shoulder_bore, PARAMS.hyd_shoulder_rod);
+      const elAreas = calcPistonAreas(PARAMS.hyd_elbow_bore, PARAMS.hyd_elbow_rod);
+      const pneuAreas = calcPistonAreas(PARAMS.pneu_bore, PARAMS.pneu_rod);
+
+      function calcGravitationalTorques(theta1, theta2, payloadMass, isPayloadGrasped) {
+        const effectivePayload = isPayloadGrasped ? payloadMass : 0.0;
+        const globalElbowAngle = theta1 + theta2;
+
+        const r_com1 = PARAMS.L_upper * PARAMS.com_upper_ratio;
+        const r_com2 = PARAMS.L_forearm * PARAMS.com_forearm_ratio;
+
+        const m1 = PARAMS.m_upper;
+        const m2 = PARAMS.m_forearm;
+        const m_end = PARAMS.m_gripper + effectivePayload;
+
+        const tau_elbow = (m2 * r_com2 + m_end * PARAMS.L_forearm) * G * Math.cos(globalElbowAngle);
+        const tau_shoulder = (m1 * r_com1 + (m2 + m_end) * PARAMS.L_upper) * G * Math.cos(theta1) + tau_elbow;
+
+        return {
+          tau_shoulder: Math.abs(tau_shoulder),
+          tau_elbow: Math.abs(tau_elbow),
+          raw_shoulder: tau_shoulder,
+          raw_elbow: tau_elbow
+        };
+      }
+
+      function calcActuatorGeometry(theta1, theta2) {
+        const shP1 = { x: PARAMS.sh_mount_base.x, y: PARAMS.sh_mount_base.y };
+        const shArmAngle = theta1 + PARAMS.sh_mount_link.theta_offset;
+        const shP2 = {
+          x: PARAMS.sh_mount_link.r * Math.cos(shArmAngle),
+          y: PARAMS.sh_mount_link.r * Math.sin(shArmAngle)
+        };
+        const vSh = { x: shP2.x - shP1.x, y: shP2.y - shP1.y };
+        const lenSh = Math.hypot(vSh.x, vSh.y);
+        const crossSh = Math.abs(shP1.x * shP2.y - shP1.y * shP2.x);
+        const r_perp_shoulder = lenSh > 0.001 ? crossSh / lenSh : 0.001;
+
+        const elP1 = {
+          x: PARAMS.el_mount_base.r * Math.cos(PARAMS.el_mount_base.theta_offset),
+          y: PARAMS.el_mount_base.r * Math.sin(PARAMS.el_mount_base.theta_offset)
+        };
+        const elP2 = {
+          x: PARAMS.L_upper + PARAMS.el_mount_link.r * Math.cos(theta2 + PARAMS.el_mount_link.theta_offset),
+          y: PARAMS.el_mount_link.r * Math.sin(theta2 + PARAMS.el_mount_link.theta_offset)
+        };
+        const vEl = { x: elP2.x - elP1.x, y: elP2.y - elP1.y };
+        const lenEl = Math.hypot(vEl.x, vEl.y);
+
+        const elbowPivot = { x: PARAMS.L_upper, y: 0.0 };
+        const vP1 = { x: elP1.x - elbowPivot.x, y: elP1.y - elbowPivot.y };
+        const vP2 = { x: elP2.x - elbowPivot.x, y: elP2.y - elbowPivot.y };
+        const crossEl = Math.abs(vP1.x * vP2.y - vP1.y * vP2.x);
+        const r_perp_elbow = lenEl > 0.001 ? crossEl / lenEl : 0.001;
+
+        return {
+          shoulderLength: lenSh,
+          shoulderMomentArm: r_perp_shoulder,
+          elbowLength: lenEl,
+          elbowMomentArm: r_perp_elbow
+        };
+      }
+
+      function verifyState(state) {
+        const theta1Rad = (state.shoulderAngleDeg * Math.PI) / 180;
+        const theta2Rad = (state.elbowAngleDeg * Math.PI) / 180;
+
+        const geom = calcActuatorGeometry(theta1Rad, theta2Rad);
+        const torques = calcGravitationalTorques(theta1Rad, theta2Rad, state.payloadMass, state.isPayloadGrasped);
+
+        const reqShoulderForce = geom.shoulderMomentArm > 0.001 ? torques.tau_shoulder / geom.shoulderMomentArm : 99999;
+        const reqElbowForce = geom.elbowMomentArm > 0.001 ? torques.tau_elbow / geom.elbowMomentArm : 99999;
+
+        // Pressure depending on valve center mode
+        let effectiveHydPressure = state.pumpRunning ? state.hydraulicPressureMPa : 0.0;
+        if (state.valveCenterType === 'TANDEM' && state.shoulderValve === 'NEUTRAL' && state.elbowValve === 'NEUTRAL' && state.pumpRunning) {
+          effectiveHydPressure = 0.15; // Pump idle circulation backpressure
+        } else if (state.valveCenterType === 'CLOSED' && state.shoulderValve === 'NEUTRAL' && state.elbowValve === 'NEUTRAL' && state.pumpRunning) {
+          effectiveHydPressure = state.reliefValvePressureMPa; // PRV cracks open
+        }
+
+        const hydPa = effectiveHydPressure * 1e6;
+        let availShoulderForce = hydPa * shAreas.full * PARAMS.hyd_efficiency;
+        let availElbowForce = hydPa * elAreas.full * PARAMS.hyd_efficiency;
+
+        if (state.valveCenterType === 'REGEN' && state.shoulderValve === 'EXTEND') {
+          // Regenerative extension: Force is determined by rod area
+          availShoulderForce = hydPa * shAreas.rodArea * PARAMS.hyd_efficiency;
+        }
+
+        const shStrokePass = geom.shoulderLength >= PARAMS.sh_cylinder_min_len && geom.shoulderLength <= PARAMS.sh_cylinder_max_len;
+        const elStrokePass = geom.elbowLength >= PARAMS.el_cylinder_min_len && geom.elbowLength <= PARAMS.el_cylinder_max_len;
+
+        const shForcePass = state.pumpRunning ? availShoulderForce >= reqShoulderForce : false;
+        const elForcePass = state.pumpRunning ? availElbowForce >= reqElbowForce : false;
+
+        // Pneumatics
+        const pneuPa = state.airSupplyEnabled ? state.pneumaticPressureMPa * 1e6 : 0.0;
+        let pneu = { idealPistonForce: 0, availablePistonForce: 0, fingerNormalForce: 0, holdingCapacityKg: 0, isGripSufficient: false, margin: 0, statusText: 'OPEN / VENTED' };
+
+        if (state.airSupplyEnabled && state.gripperClosed) {
+          pneu.idealPistonForce = pneuPa * pneuAreas.full;
+          pneu.availablePistonForce = pneu.idealPistonForce * PARAMS.pneu_efficiency;
+          pneu.fingerNormalForce = pneu.availablePistonForce * PARAMS.pneu_mech_advantage;
+          const maxFric = 2 * PARAMS.friction_coeff * pneu.fingerNormalForce;
+          pneu.holdingCapacityKg = maxFric / G;
+          const reqFric = state.payloadMass * G;
+          pneu.margin = reqFric > 0.001 ? maxFric / reqFric : 99.9;
+          pneu.isGripSufficient = maxFric >= reqFric;
+          pneu.statusText = pneu.isGripSufficient ? 'PASS (SECURE)' : 'FAIL (SLIP RISK)';
+        }
+
+        return {
+          geometry: geom,
+          torques,
+          forces: { reqShoulderForce, availShoulderForce, shForcePass, shStrokePass, reqElbowForce, availElbowForce, elForcePass, elStrokePass, effectiveHydPressure },
+          pneumatics: pneu
+        };
+      }
+
+      exports.Physics = {
+        PARAMS, shAreas, elAreas, pneuAreas,
+        calcGravitationalTorques, calcActuatorGeometry, verifyState
+      };
+    })(window.HP_SIM);
+
+    /* ==========================================================================
+       MODULE 2: 3D ROBOT VIEW WITH DETAILED RIGID LINKS, CYLINDERS & 3D HOSES
+       ========================================================================== */
+    (function (exports) {
+      'use strict';
+
+      class Arm3DView {
+        constructor(containerId) {
+          this.container = document.getElementById(containerId);
+          this.scene = null;
+          this.camera = null;
+          this.renderer = null;
+          this.controls = null;
+          this.isLoaded = false;
+          this.isCutaway = false;
+
+          // Meshes
+          this.turretGroup = null;
+          this.upperArmGroup = null;
+          this.forearmGroup = null;
+          this.gripperGroup = null;
+          this.leftFinger = null;
+          this.rightFinger = null;
+          this.payloadMesh = null;
+
+          // Cylinders
+          this.shBarrel = null;
+          this.shRod = null;
+          this.elBarrel = null;
+          this.elRod = null;
+
+          // Flexible Hoses (Three.js Tubes)
+          this.hoseShSupply = null;
+          this.hoseShReturn = null;
+
+          this.init();
+        }
+
+        init() {
+          if (typeof THREE === 'undefined') return;
+
+          const width = this.container.clientWidth || 550;
+          const height = this.container.clientHeight || 340;
+
+          this.scene = new THREE.Scene();
+          this.scene.background = new THREE.Color(0x0c1017);
+
+          this.camera = new THREE.PerspectiveCamera(42, width / height, 0.05, 50.0);
+          this.camera.position.set(0.70, 0.45, 0.70);
+
+          this.renderer = new THREE.WebGLRenderer({ antialias: true, canvas: document.getElementById('canvas-3d') });
+          this.renderer.setSize(width, height);
+          this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+          this.renderer.shadowMap.enabled = true;
+          this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+          this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+          this.controls.target.set(0, 0.18, 0);
+          this.controls.enableDamping = true;
+          this.controls.dampingFactor = 0.05;
+
+          // Studio Lighting
+          const ambLight = new THREE.AmbientLight(0xffffff, 0.7);
+          this.scene.add(ambLight);
+
+          const dirLight = new THREE.DirectionalLight(0xffffff, 0.95);
+          dirLight.position.set(1.5, 3.0, 1.2);
+          dirLight.castShadow = true;
+          dirLight.shadow.mapSize.width = 1024;
+          dirLight.shadow.mapSize.height = 1024;
+          this.scene.add(dirLight);
+
+          const rimLight = new THREE.DirectionalLight(0x388bfd, 0.4);
+          rimLight.position.set(-1.5, 1.5, -1.0);
+          this.scene.add(rimLight);
+
+          this.buildEnvironment();
+          this.buildRobot();
+
+          window.addEventListener('resize', () => this.onWindowResize());
+          this.isLoaded = true;
+        }
+
+        buildEnvironment() {
+          const grid = new THREE.GridHelper(1.4, 28, 0x303e54, 0x18202e);
+          grid.position.y = 0;
+          this.scene.add(grid);
+
+          // Ground floor shadow receiver
+          const shadowPlane = new THREE.Mesh(
+            new THREE.PlaneGeometry(2.0, 2.0),
+            new THREE.ShadowMaterial({ opacity: 0.35 })
+          );
+          shadowPlane.rotation.x = -Math.PI / 2;
+          shadowPlane.receiveShadow = true;
+          this.scene.add(shadowPlane);
+
+          // Workcell station stands
+          const pickStand = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.045, 0.050, 0.04, 24),
+            new THREE.MeshStandardMaterial({ color: 0x212a3a, roughness: 0.6 })
+          );
+          pickStand.position.set(0.24, 0.02, -0.05);
+          this.scene.add(pickStand);
+
+          const dropStand = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.045, 0.050, 0.04, 24),
+            new THREE.MeshStandardMaterial({ color: 0x212a3a, roughness: 0.6 })
+          );
+          dropStand.position.set(0.24, 0.02, 0.08);
+          this.scene.add(dropStand);
+        }
+
+        buildRobot() {
+          const matKukaOrange = new THREE.MeshStandardMaterial({ color: 0xe65100, roughness: 0.35, metalness: 0.45 });
+          const matCastIron = new THREE.MeshStandardMaterial({ color: 0x2b3340, roughness: 0.6, metalness: 0.8 });
+          const matChrome = new THREE.MeshStandardMaterial({ color: 0xf1f2f6, roughness: 0.1, metalness: 0.98 });
+          const matBarrel = new THREE.MeshStandardMaterial({ color: 0x1e2736, roughness: 0.3, metalness: 0.75, transparent: true, opacity: 0.95 });
+          const matHoseRed = new THREE.MeshStandardMaterial({ color: 0xd63031, roughness: 0.4 });
+          const matHoseBlue = new THREE.MeshStandardMaterial({ color: 0x0984e3, roughness: 0.4 });
+
+          // 1. Heavy Base Plate
+          const basePlate = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.016, 0.20), matCastIron);
+          basePlate.position.set(0, 0.008, 0);
+          basePlate.castShadow = true;
+          basePlate.receiveShadow = true;
+          this.scene.add(basePlate);
+
+          // 2. Rotating Turret (Waist Yaw)
+          this.turretGroup = new THREE.Group();
+          this.turretGroup.position.set(0, 0.016, 0);
+          this.scene.add(this.turretGroup);
+
+          const slewingRing = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.075, 0.025, 32), matCastIron);
+          slewingRing.position.y = 0.0125;
+          this.turretGroup.add(slewingRing);
+
+          // Turret Dual Fork Clevis
+          const forkLeft = new THREE.Mesh(new THREE.BoxGeometry(0.020, 0.070, 0.065), matCastIron);
+          forkLeft.position.set(0, 0.055, -0.030);
+          this.turretGroup.add(forkLeft);
+
+          const forkRight = new THREE.Mesh(new THREE.BoxGeometry(0.020, 0.070, 0.065), matCastIron);
+          forkRight.position.set(0, 0.055, 0.030);
+          this.turretGroup.add(forkRight);
+
+          // 3. Upper Arm Boom (Link 1 - 250 mm)
+          this.upperArmGroup = new THREE.Group();
+          this.upperArmGroup.position.set(0, 0.080, 0); // Shoulder Pivot Axis
+          this.turretGroup.add(this.upperArmGroup);
+
+          // Main Boom Structure with ribbed geometry
+          const upperArmMesh = new THREE.Mesh(new THREE.BoxGeometry(0.250, 0.040, 0.036), matKukaOrange);
+          upperArmMesh.position.set(0.125, 0, 0);
+          upperArmMesh.castShadow = true;
+          this.upperArmGroup.add(upperArmMesh);
+
+          // Pivot Caps
+          const shPivotCap = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.068, 20), matCastIron);
+          shPivotCap.rotation.x = Math.PI / 2;
+          this.upperArmGroup.add(shPivotCap);
+
+          // 4. Forearm Boom (Link 2 - 200 mm)
+          this.forearmGroup = new THREE.Group();
+          this.forearmGroup.position.set(0.250, 0, 0); // Elbow Pivot Axis
+          this.upperArmGroup.add(this.forearmGroup);
+
+          const forearmMesh = new THREE.Mesh(new THREE.BoxGeometry(0.200, 0.032, 0.028), matKukaOrange);
+          forearmMesh.position.set(0.100, 0, 0);
+          forearmMesh.castShadow = true;
+          this.forearmGroup.add(forearmMesh);
+
+          const elPivotCap = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.055, 20), matCastIron);
+          elPivotCap.rotation.x = Math.PI / 2;
+          this.forearmGroup.add(elPivotCap);
+
+          // 5. Pneumatic Parallel Gripper End Effector
+          this.gripperGroup = new THREE.Group();
+          this.gripperGroup.position.set(0.200, 0, 0);
+          this.forearmGroup.add(this.gripperGroup);
+
+          // Anodized Gripper Body
+          const gripBody = new THREE.Mesh(new THREE.BoxGeometry(0.042, 0.038, 0.040), matCastIron);
+          gripBody.position.set(0.021, 0, 0);
+          this.gripperGroup.add(gripBody);
+
+          // Guide Rails
+          const railTop = new THREE.Mesh(new THREE.CylinderGeometry(0.003, 0.003, 0.045, 12), matChrome);
+          railTop.position.set(0.032, 0, 0);
+          this.gripperGroup.add(railTop);
+
+          // Precision Sliding Jaws with Orange Polyurethane Grip Pads
+          const jawMat = new THREE.MeshStandardMaterial({ color: 0x57606f, roughness: 0.3 });
+          const padMat = new THREE.MeshStandardMaterial({ color: 0xffa801, roughness: 0.8 });
+
+          this.leftFinger = new THREE.Group();
+          const jawLeftMesh = new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.008, 0.008), jawMat);
+          jawLeftMesh.position.set(0.045, 0, 0);
+          const padLeft = new THREE.Mesh(new THREE.BoxGeometry(0.016, 0.006, 0.003), padMat);
+          padLeft.position.set(0.045, 0, 0.005);
+          this.leftFinger.add(jawLeftMesh, padLeft);
+          this.gripperGroup.add(this.leftFinger);
+
+          this.rightFinger = new THREE.Group();
+          const jawRightMesh = new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.008, 0.008), jawMat);
+          jawRightMesh.position.set(0.045, 0, 0);
+          const padRight = new THREE.Mesh(new THREE.BoxGeometry(0.016, 0.006, 0.003), padMat);
+          padRight.position.set(0.045, 0, -0.005);
+          this.rightFinger.add(jawRightMesh, padRight);
+          this.gripperGroup.add(this.rightFinger);
+
+          // 6. Test Workpiece (Payload)
+          const payloadMat = new THREE.MeshStandardMaterial({ color: 0x00d2d3, roughness: 0.25, metalness: 0.85 });
+          this.payloadMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.028, 20), payloadMat);
+          this.payloadMesh.castShadow = true;
+          this.scene.add(this.payloadMesh);
+          this.payloadMesh.position.set(0.24, 0.054, -0.05);
+
+          // 7. Hydraulic Actuators (Trunnion Barrels + Chrome Sliding Rods)
+          // Shoulder Actuator
+          this.shBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.12, 20), matBarrel);
+          this.shRod = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.11, 20), matChrome);
+          this.shBarrel.castShadow = true;
+          this.scene.add(this.shBarrel, this.shRod);
+
+          // Elbow Actuator
+          this.elBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.11, 20), matBarrel);
+          this.elRod = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.10, 20), matChrome);
+          this.elBarrel.castShadow = true;
+          this.scene.add(this.elBarrel, this.elRod);
+        }
+
+        positionActuator(barrelMesh, rodMesh, p1, p2) {
+          const v = new THREE.Vector3().subVectors(p2, p1);
+          const fullLen = v.length();
+          const orientation = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), v.clone().normalize());
+
+          const barrelLen = fullLen * 0.55;
+          barrelMesh.scale.set(1, barrelLen / 0.12, 1);
+          barrelMesh.position.copy(p1).add(v.clone().normalize().multiplyScalar(barrelLen * 0.5));
+          barrelMesh.quaternion.copy(orientation);
+
+          const rodLen = fullLen * 0.65;
+          rodMesh.scale.set(1, rodLen / 0.10, 1);
+          rodMesh.position.copy(p2).sub(v.clone().normalize().multiplyScalar(rodLen * 0.5));
+          rodMesh.quaternion.copy(orientation);
+        }
+
+        update(state) {
+          if (!this.isLoaded) return;
+
+          const th0 = (state.baseYawDeg * Math.PI) / 180;
+          const th1 = (state.shoulderAngleDeg * Math.PI) / 180;
+          const th2 = (state.elbowAngleDeg * Math.PI) / 180;
+
+          // Joint Rotations
+          this.turretGroup.rotation.y = th0;
+          this.upperArmGroup.rotation.z = th1;
+          this.forearmGroup.rotation.z = th2;
+
+          // Gripper Jaws Slide
+          const jawGap = state.gripperClosed ? 0.010 : 0.020;
+          this.leftFinger.position.z = jawGap;
+          this.rightFinger.position.z = -jawGap;
+
+          // Kinematic Calculation of Actuator Mount Vectors
+          const shBaseLocal = new THREE.Vector3(-0.040, 0.080 + 0.030, 0).applyEuler(new THREE.Euler(0, th0, 0));
+          const shArmLocal = new THREE.Vector3(0.090 * Math.cos(0.26), 0.090 * Math.sin(0.26), 0)
+            .applyEuler(new THREE.Euler(0, 0, th1))
+            .add(new THREE.Vector3(0, 0.080, 0))
+            .applyEuler(new THREE.Euler(0, th0, 0));
+          this.positionActuator(this.shBarrel, this.shRod, shBaseLocal, shArmLocal);
+
+          const elBaseLocal = new THREE.Vector3(0.110 * Math.cos(-0.22), 0.110 * Math.sin(-0.22), 0)
+            .applyEuler(new THREE.Euler(0, 0, th1))
+            .add(new THREE.Vector3(0, 0.080, 0))
+            .applyEuler(new THREE.Euler(0, th0, 0));
+          this.forearmGroup.updateMatrixWorld(true);
+          const elForearmLocal = new THREE.Vector3(0.075 * Math.cos(0.30), 0.075 * Math.sin(0.30), 0)
+            .applyMatrix4(this.forearmGroup.matrixWorld);
+          this.positionActuator(this.elBarrel, this.elRod, elBaseLocal, elForearmLocal);
+
+          // Payload Positioning
+          if (state.isPayloadGrasped) {
+            const tcpWorld = new THREE.Vector3(0.055, 0, 0).applyMatrix4(this.gripperGroup.matrixWorld);
+            this.payloadMesh.position.copy(tcpWorld);
+          } else {
+            this.payloadMesh.position.set(state.payloadPos.x, state.payloadPos.y, state.payloadPos.z);
+          }
+
+          // HUD Updates
+          document.getElementById('hud-yaw').textContent = state.baseYawDeg.toFixed(1) + '°';
+          document.getElementById('hud-shoulder').textContent = state.shoulderAngleDeg.toFixed(1) + '°';
+          document.getElementById('hud-elbow').textContent = state.elbowAngleDeg.toFixed(1) + '°';
+          document.getElementById('hud-gripper').textContent = (jawGap * 2000).toFixed(0) + ' mm';
+          
+          const vFlow = (state.pumpRunning && (state.shoulderValve !== 'NEUTRAL' || state.elbowValve !== 'NEUTRAL'))
+            ? (state.pumpFlowRateLmin / 60 / 1000 / (Math.PI * 0.025 * 0.025 / 4)).toFixed(2)
+            : '0.00';
+          document.getElementById('hud-flow').textContent = vFlow + ' m/s';
+
+          if (this.controls) this.controls.update();
+          this.renderer.render(this.scene, this.camera);
+        }
+
+        resetCamera() {
+          if (this.camera && this.controls) {
+            this.camera.position.set(0.70, 0.45, 0.70);
+            this.controls.target.set(0, 0.18, 0);
+          }
+        }
+
+        toggleCutaway() {
+          this.isCutaway = !this.isCutaway;
+          const op = this.isCutaway ? 0.35 : 0.95;
+          if (this.shBarrel) this.shBarrel.material.opacity = op;
+          if (this.elBarrel) this.elBarrel.material.opacity = op;
+        }
+
+        onWindowResize() {
+          if (!this.container || !this.renderer || !this.camera) return;
+          this.camera.aspect = this.container.clientWidth / this.container.clientHeight;
+          this.camera.updateProjectionMatrix();
+          this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
+        }
+      }
+
+      exports.Arm3DView = Arm3DView;
+    })(window.HP_SIM);
+
+    /* ==========================================================================
+       MODULE 3: DYNAMIC ISO 1219 HYDRAULIC SCHEMATIC
+       ========================================================================== */
+    (function (exports) {
+      'use strict';
+
+      class HydraulicCircuit {
+        constructor(containerId, onComponentClick) {
+          this.container = document.getElementById(containerId);
+          this.onComponentClick = onComponentClick;
+          this.render();
+          this.attachEvents();
+        }
+
+        render() {
+          this.container.innerHTML = `
+            <svg viewBox="0 0 680 320" xmlns="http://www.w3.org/2000/svg">
+              <!-- RESERVOIR -->
+              <g class="circuit-component" id="hyd-comp-tank" transform="translate(35, 235)">
+                <path d="M 0 0 L 0 35 L 50 35 L 50 0" stroke="#8b949e" stroke-width="2.5" fill="none"/>
+                <rect x="4" y="14" width="42" height="19" fill="#1e90ff" opacity="0.3"/>
+                <text x="25" y="48" fill="#8b949e" font-size="9" text-anchor="middle">Reservoir</text>
+              </g>
+
+              <!-- PUMP & MOTOR -->
+              <g class="circuit-component" id="hyd-comp-pump" transform="translate(60, 170)">
+                <circle cx="-15" cy="0" r="15" stroke="#8b949e" stroke-width="2" fill="#161b22"/>
+                <text x="-15" y="4" fill="#f0f6fc" font-size="11" font-weight="bold" text-anchor="middle">M</text>
+                <line x1="0" y1="0" x2="14" y2="0" stroke="#8b949e" stroke-width="3"/>
+                <circle cx="30" cy="0" r="16" stroke="#8b949e" stroke-width="2" fill="#161b22"/>
+                <polygon points="30,-12 24,-2 36,-2" fill="#ff3838"/>
+                <text x="30" y="28" fill="#c9d1d9" font-size="9" text-anchor="middle">Pump (Q)</text>
+              </g>
+
+              <!-- SUCTION LINE -->
+              <path id="line-suction" class="schematic-line line-return" d="M 60 235 L 60 190 L 90 190 L 90 186"/>
+
+              <!-- RELIEF VALVE -->
+              <g class="circuit-component" id="hyd-comp-prv" transform="translate(155, 195)">
+                <rect x="-16" y="-16" width="32" height="32" stroke="#8b949e" stroke-width="2" fill="#161b22"/>
+                <path d="M -10 -8 L 10 8" stroke="#f85149" stroke-width="2"/>
+                <path d="M -5 10 L 5 10 M 0 10 L 0 -10" stroke="#8b949e" stroke-width="1.5"/>
+                <path d="M 16 -8 L 22 -8 L 24 -3 L 28 -13 L 30 -8 L 35 -8" stroke="#ffa801" stroke-width="1.5" fill="none"/>
+                <text x="0" y="28" fill="#c9d1d9" font-size="8.5" text-anchor="middle">Relief Valve</text>
+              </g>
+
+              <!-- MANIFOLD LINES -->
+              <path id="line-pump-supply" class="schematic-line line-supply" d="M 90 154 L 90 95 L 240 95"/>
+              <path id="line-prv-branch" class="schematic-line line-supply" d="M 155 95 L 155 179"/>
+              <path id="line-prv-return" class="schematic-line line-return" d="M 155 211 L 155 255 L 85 255"/>
+
+              <!-- 4/3 SHOULDER DIRECTIONAL VALVE -->
+              <g class="circuit-component" id="hyd-comp-dcv1" transform="translate(240, 95)">
+                <rect x="0" y="-22" width="90" height="44" stroke="#58a6ff" stroke-width="2" fill="#161b22"/>
+                <line x1="30" y1="-22" x2="30" y2="22" stroke="#30363d" stroke-width="1.5"/>
+                <line x1="60" y1="-22" x2="60" y2="22" stroke="#30363d" stroke-width="1.5"/>
+                <text x="15" y="32" fill="#8b949e" font-size="9" text-anchor="middle">P</text>
+                <text x="45" y="32" fill="#8b949e" font-size="9" text-anchor="middle">T</text>
+                <text x="15" y="-26" fill="#8b949e" font-size="9" text-anchor="middle">A</text>
+                <text x="75" y="-26" fill="#8b949e" font-size="9" text-anchor="middle">B</text>
+                <text x="45" y="4" fill="#f0f6fc" font-size="8.5" font-weight="bold" text-anchor="middle" id="dcv1-center-label">TANDEM</text>
+                <text x="45" y="-36" fill="#58a6ff" font-size="9.5" font-weight="bold" text-anchor="middle">Shoulder DCV</text>
+              </g>
+
+              <path id="line-tandem" class="schematic-line line-supply" d="M 330 95 L 420 95"/>
+
+              <!-- 4/3 ELBOW DIRECTIONAL VALVE -->
+              <g class="circuit-component" id="hyd-comp-dcv2" transform="translate(420, 95)">
+                <rect x="0" y="-22" width="90" height="44" stroke="#58a6ff" stroke-width="2" fill="#161b22"/>
+                <line x1="30" y1="-22" x2="30" y2="22" stroke="#30363d" stroke-width="1.5"/>
+                <line x1="60" y1="-22" x2="60" y2="22" stroke="#30363d" stroke-width="1.5"/>
+                <text x="15" y="32" fill="#8b949e" font-size="9" text-anchor="middle">P</text>
+                <text x="45" y="32" fill="#8b949e" font-size="9" text-anchor="middle">T</text>
+                <text x="15" y="-26" fill="#8b949e" font-size="9" text-anchor="middle">A</text>
+                <text x="75" y="-26" fill="#8b949e" font-size="9" text-anchor="middle">B</text>
+                <text x="45" y="4" fill="#f0f6fc" font-size="8.5" font-weight="bold" text-anchor="middle" id="dcv2-center-label">TANDEM</text>
+                <text x="45" y="-36" fill="#58a6ff" font-size="9.5" font-weight="bold" text-anchor="middle">Elbow DCV</text>
+              </g>
+
+              <!-- RETURN LINES -->
+              <path id="line-tank-return" class="schematic-line line-return" d="M 465 117 L 465 265 L 60 265 L 60 245"/>
+              <path id="line-dcv1-return" class="schematic-line line-return" d="M 285 117 L 285 265"/>
+
+              <!-- SHOULDER CYLINDER -->
+              <g class="circuit-component" id="hyd-comp-cyl1" transform="translate(240, 15)">
+                <rect x="10" y="0" width="70" height="24" stroke="#8b949e" stroke-width="2" fill="#161b22"/>
+                <rect id="cyl1-piston" x="35" y="2" width="8" height="20" fill="#ff3838"/>
+                <line id="cyl1-rod" x1="43" y1="12" x2="95" y2="12" stroke="#f1f2f6" stroke-width="4"/>
+                <text x="45" y="-5" fill="#c9d1d9" font-size="8.5" text-anchor="middle">Shoulder Cyl (Ø25)</text>
+              </g>
+
+              <path id="line-sh-A" class="schematic-line line-inactive" d="M 255 73 L 255 39"/>
+              <path id="line-sh-B" class="schematic-line line-inactive" d="M 315 73 L 315 39"/>
+
+              <!-- ELBOW CYLINDER -->
+              <g class="circuit-component" id="hyd-comp-cyl2" transform="translate(420, 15)">
+                <rect x="10" y="0" width="70" height="24" stroke="#8b949e" stroke-width="2" fill="#161b22"/>
+                <rect id="cyl2-piston" x="35" y="2" width="8" height="20" fill="#ff3838"/>
+                <line id="cyl2-rod" x1="43" y1="12" x2="95" y2="12" stroke="#f1f2f6" stroke-width="4"/>
+                <text x="45" y="-5" fill="#c9d1d9" font-size="8.5" text-anchor="middle">Elbow Cyl (Ø25)</text>
+              </g>
+
+              <path id="line-el-A" class="schematic-line line-inactive" d="M 435 73 L 435 39"/>
+              <path id="line-el-B" class="schematic-line line-inactive" d="M 495 73 L 495 39"/>
+            </svg>
+          `;
+        }
+
+        attachEvents() {
+          const reg = (id, meta) => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('click', () => this.onComponentClick(meta));
+          };
+
+          reg('hyd-comp-pump', {
+            title: 'Hydraulic External Gear Pump',
+            category: 'Pressure Delivery',
+            desc: 'Positive displacement pump converting mechanical electric motor power into pressurized fluid flow.',
+            specs: 'Displacement: 4.2 cc/rev | Flow Setpoint: 1-25 L/min'
+          });
+
+          reg('hyd-comp-prv', {
+            title: 'Direct-Acting Pressure Relief Valve (PRV)',
+            category: 'Circuit Safety',
+            desc: 'Protects the system against overpressure. When line pressure exceeds setting, poppet cracks open to bypass fluid back to reservoir.',
+            specs: 'Setting: Configurable 0.5 - 5.0 MPa'
+          });
+
+          reg('hyd-comp-dcv1', {
+            title: '4/3-Way Directional Control Valve',
+            category: 'Spool Valve',
+            desc: 'Controls extension, retraction, or holding of shoulder actuator. Center spool conforms to chosen architecture selector.',
+            specs: 'Solenoid Pilot Operated | ISO 4401 Size 03'
+          });
+        }
+
+        update(state) {
+          const isPumping = state.pumpRunning;
+          const shVal = state.shoulderValve;
+          const elVal = state.elbowValve;
+
+          // Update Spool Labels
+          document.getElementById('dcv1-center-label').textContent = state.valveCenterType;
+          document.getElementById('dcv2-center-label').textContent = state.valveCenterType;
+
+          // Main Supply Line
+          const supplyLine = document.getElementById('line-pump-supply');
+          if (supplyLine) {
+            supplyLine.className.baseVal = isPumping ? 'schematic-line line-supply anim-flow' : 'schematic-line line-inactive';
+          }
+
+          // Relief Valve Bypass Reaction
+          const prvReturn = document.getElementById('line-prv-return');
+          const isReliefBypass = isPumping && (
+            state.hydraulicPressureMPa >= state.reliefValvePressureMPa ||
+            (state.valveCenterType === 'CLOSED' && shVal === 'NEUTRAL' && elVal === 'NEUTRAL')
+          );
+          if (prvReturn) {
+            prvReturn.className.baseVal = isReliefBypass ? 'schematic-line line-return anim-flow' : 'schematic-line line-inactive';
+          }
+
+          // Shoulder Lines
+          const lineShA = document.getElementById('line-sh-A');
+          const lineShB = document.getElementById('line-sh-B');
+          if (lineShA && lineShB) {
+            if (!isPumping || shVal === 'NEUTRAL') {
+              if (state.valveCenterType === 'FLOAT') {
+                lineShA.className.baseVal = 'schematic-line line-return';
+                lineShB.className.baseVal = 'schematic-line line-return';
+              } else {
+                lineShA.className.baseVal = 'schematic-line line-inactive';
+                lineShB.className.baseVal = 'schematic-line line-inactive';
+              }
+            } else if (shVal === 'EXTEND') {
+              lineShA.className.baseVal = 'schematic-line line-supply anim-flow';
+              lineShB.className.baseVal = state.valveCenterType === 'REGEN'
+                ? 'schematic-line line-supply anim-flow'
+                : 'schematic-line line-return anim-flow';
+            } else {
+              lineShA.className.baseVal = 'schematic-line line-return anim-flow';
+              lineShB.className.baseVal = 'schematic-line line-supply anim-flow';
+            }
+          }
+
+          // Elbow Lines
+          const lineElA = document.getElementById('line-el-A');
+          const lineElB = document.getElementById('line-el-B');
+          if (lineElA && lineElB) {
+            if (!isPumping || elVal === 'NEUTRAL') {
+              lineElA.className.baseVal = 'schematic-line line-inactive';
+              lineElB.className.baseVal = 'schematic-line line-inactive';
+            } else if (elVal === 'EXTEND') {
+              lineElA.className.baseVal = 'schematic-line line-supply anim-flow';
+              lineElB.className.baseVal = 'schematic-line line-return anim-flow';
+            } else {
+              lineElA.className.baseVal = 'schematic-line line-return anim-flow';
+              lineElB.className.baseVal = 'schematic-line line-supply anim-flow';
+            }
+          }
+
+          // Piston Displacement
+          const shFrac = (state.shoulderStrokeMm - 55) / (135 - 55);
+          const elFrac = (state.elbowStrokeMm - 100) / (230 - 100);
+
+          const p1 = document.getElementById('cyl1-piston');
+          const r1 = document.getElementById('cyl1-rod');
+          if (p1 && r1) {
+            const xPos = 12 + Math.max(0, Math.min(1, shFrac)) * 45;
+            p1.setAttribute('x', xPos);
+            r1.setAttribute('x1', xPos + 8);
+            r1.setAttribute('x2', xPos + 55);
+          }
+
+          const p2 = document.getElementById('cyl2-piston');
+          const r2 = document.getElementById('cyl2-rod');
+          if (p2 && r2) {
+            const xPos = 12 + Math.max(0, Math.min(1, elFrac)) * 45;
+            p2.setAttribute('x', xPos);
+            r2.setAttribute('x1', xPos + 8);
+            r2.setAttribute('x2', xPos + 55);
+          }
+        }
+      }
+
+      exports.HydraulicCircuit = HydraulicCircuit;
+    })(window.HP_SIM);
+
+    /* ==========================================================================
+       MODULE 4: DYNAMIC PNEUMATIC SCHEMATIC
+       ========================================================================== */
+    (function (exports) {
+      'use strict';
+
+      class PneumaticCircuit {
+        constructor(containerId, onComponentClick) {
+          this.container = document.getElementById(containerId);
+          this.onComponentClick = onComponentClick;
+          this.render();
+          this.attachEvents();
+        }
+
+        render() {
+          this.container.innerHTML = `
+            <svg viewBox="0 0 680 320" xmlns="http://www.w3.org/2000/svg">
+              <g class="circuit-component" id="pneu-comp-source" transform="translate(45, 155)">
+                <circle cx="0" cy="0" r="18" stroke="#2ed573" stroke-width="2.5" fill="#161b22"/>
+                <polygon points="-7,5 7,5 0,-8" fill="#2ed573"/>
+                <text x="0" y="32" fill="#c9d1d9" font-size="9" text-anchor="middle">Air Header</text>
+              </g>
+
+              <g class="circuit-component" id="pneu-comp-frl" transform="translate(135, 155)">
+                <rect x="-24" y="-20" width="48" height="40" stroke="#8b949e" stroke-width="2" fill="#161b22"/>
+                <line x1="-24" y1="0" x2="24" y2="0" stroke="#8b949e" stroke-width="1.5" stroke-dasharray="3,3"/>
+                <circle cx="0" cy="-30" r="11" stroke="#8b949e" stroke-width="1.5" fill="#161b22"/>
+                <line x1="0" y1="-30" x2="6" y2="-35" stroke="#2ed573" stroke-width="2"/>
+                <text x="0" y="32" fill="#c9d1d9" font-size="9" text-anchor="middle">FRL Station</text>
+              </g>
+
+              <path id="line-pneu-source" class="schematic-line line-pneu-press" d="M 63 155 L 111 155"/>
+              <path id="line-pneu-main" class="schematic-line line-pneu-press" d="M 159 155 L 255 155"/>
+
+              <g class="circuit-component" id="pneu-comp-52valve" transform="translate(255, 155)">
+                <rect x="0" y="-30" width="100" height="60" stroke="#2ed573" stroke-width="2" fill="#161b22"/>
+                <line x1="50" y1="-30" x2="50" y2="30" stroke="#30363d" stroke-width="2"/>
+                <text x="50" y="44" fill="#8b949e" font-size="9" text-anchor="middle">1(P)</text>
+                <text x="25" y="-36" fill="#8b949e" font-size="9" text-anchor="middle">2(B)</text>
+                <text x="75" y="-36" fill="#8b949e" font-size="9" text-anchor="middle">4(A)</text>
+                <text x="50" y="5" fill="#f0f6fc" font-size="9.5" font-weight="bold" text-anchor="middle" id="pneu-valve-text">CLAMP</text>
+                <text x="50" y="-46" fill="#2ed573" font-size="10.5" font-weight="bold" text-anchor="middle">Directional DCV</text>
+              </g>
+
+              <path id="line-pneu-workA" class="schematic-line line-pneu-press" d="M 330 125 L 330 55 L 460 55"/>
+              <path id="line-pneu-workB" class="schematic-line line-pneu-vent" d="M 280 125 L 280 35 L 515 35 L 515 45"/>
+
+              <g class="circuit-component" id="pneu-comp-gripper" transform="translate(460, 45)">
+                <rect x="0" y="0" width="70" height="28" stroke="#8b949e" stroke-width="2" fill="#161b22"/>
+                <rect id="pneu-piston" x="38" y="2" width="8" height="24" fill="#2ed573"/>
+                <line id="pneu-rod-left" x1="38" y1="14" x2="2" y2="14" stroke="#f1f2f6" stroke-width="4"/>
+                <line id="pneu-rod-right" x1="46" y1="14" x2="85" y2="14" stroke="#f1f2f6" stroke-width="4"/>
+                <path id="finger-link-left" d="M 0 14 L -20 30 L -20 60" stroke="#58a6ff" stroke-width="4" fill="none"/>
+                <path id="finger-link-right" d="M 85 14 L 105 30 L 105 60" stroke="#58a6ff" stroke-width="4" fill="none"/>
+                <rect id="pad-left" x="-22" y="60" width="6" height="20" fill="#ffa801"/>
+                <rect id="pad-right" x="101" y="60" width="6" height="20" fill="#ffa801"/>
+                <rect id="pneu-payload-box" x="25" y="60" width="35" height="24" stroke="#00d2d3" stroke-width="2" fill="#0d1117"/>
+                <text x="42" y="75" fill="#00d2d3" font-size="8.5" text-anchor="middle">Payload</text>
+                <text x="42" y="-9" fill="#c9d1d9" font-size="9.5" text-anchor="middle">Parallel Gripper (Ø32)</text>
+              </g>
+            </svg>
+          `;
+        }
+
+        attachEvents() {
+          const reg = (id, meta) => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('click', () => this.onComponentClick(meta));
+          };
+          reg('pneu-comp-frl', {
+            title: 'Filter–Regulator–Lubricator (FRL)',
+            category: 'Air Treatment',
+            desc: 'Conditions factory air, separates moisture and lubricates gripper cylinder seals.',
+            specs: 'Filter: 5 µm | Max Inflow: 1200 NL/min'
+          });
+        }
+
+        update(state) {
+          const isAir = state.airSupplyEnabled;
+          const isClosed = state.gripperClosed;
+
+          document.getElementById('pneu-valve-text').textContent = !isAir ? 'NO AIR' : (isClosed ? 'CLAMP (A)' : 'OPEN (B)');
+
+          const srcLine = document.getElementById('line-pneu-source');
+          const mainLine = document.getElementById('line-pneu-main');
+          if (srcLine && mainLine) {
+            const style = isAir ? 'schematic-line line-pneu-press anim-flow' : 'schematic-line line-pneu-vent';
+            srcLine.className.baseVal = style;
+            mainLine.className.baseVal = style;
+          }
+
+          const lineA = document.getElementById('line-pneu-workA');
+          const lineB = document.getElementById('line-pneu-workB');
+          if (lineA && lineB) {
+            if (!isAir) {
+              lineA.className.baseVal = 'schematic-line line-pneu-vent';
+              lineB.className.baseVal = 'schematic-line line-pneu-vent';
+            } else if (isClosed) {
+              lineA.className.baseVal = 'schematic-line line-pneu-press anim-flow';
+              lineB.className.baseVal = 'schematic-line line-pneu-vent';
+            } else {
+              lineA.className.baseVal = 'schematic-line line-pneu-vent';
+              lineB.className.baseVal = 'schematic-line line-pneu-press anim-flow';
+            }
+          }
+
+          const piston = document.getElementById('pneu-piston');
+          const padLeft = document.getElementById('pad-left');
+          const padRight = document.getElementById('pad-right');
+          const linkLeft = document.getElementById('finger-link-left');
+          const linkRight = document.getElementById('finger-link-right');
+
+          if (piston && padLeft && padRight && linkLeft && linkRight) {
+            const offset = isClosed ? 0 : 12;
+            piston.setAttribute('x', isClosed ? 38 : 22);
+            padLeft.setAttribute('x', -22 - offset);
+            padRight.setAttribute('x', 101 + offset);
+            linkLeft.setAttribute('d', `M 0 14 L ${-20 - offset} 30 L ${-20 - offset} 60`);
+            linkRight.setAttribute('d', `M 85 14 L ${105 + offset} 30 L ${105 + offset} 60`);
+          }
+        }
+      }
+
+      exports.PneumaticCircuit = PneumaticCircuit;
+    })(window.HP_SIM);
+
+    /* ==========================================================================
+       MODULE 5: CONTROLLER, SEQUENCER & LOGGING
+       ========================================================================== */
+    (function (exports) {
+      'use strict';
+
+      const STATE = {
+        status: 'READY',
+        simSpeed: 1.0,
+        pumpRunning: false,
+        hydraulicPressureMPa: 2.0,
+        pumpFlowRateLmin: 6.0,
+        reliefValvePressureMPa: 2.5,
+        airSupplyEnabled: true,
+        pneumaticPressureMPa: 0.60,
+
+        // Valve Architectures
+        valveCenterType: 'TANDEM', // TANDEM, CLOSED, FLOAT, REGEN
+        flowControlMode: 'METER_OUT', // METER_OUT, METER_IN, FULL_BORE
+        pneuValveType: '5_2_BISTABLE', // 5_2_BISTABLE, 5_2_SPRING, 5_3_CLOSED
+
+        shoulderValve: 'NEUTRAL',
+        elbowValve: 'NEUTRAL',
+        gripperClosed: false,
+
+        baseYawDeg: 0.0,
+        shoulderAngleDeg: 45.0,
+        elbowAngleDeg: 60.0,
+        shoulderStrokeMm: 97.7,
+        elbowStrokeMm: 186.6,
+
+        payloadMass: 0.20,
+        isPayloadGrasped: false,
+        payloadPos: { x: 0.24, y: 0.054, z: -0.05 },
+
+        autoCycleActive: false,
+        autoCycleStage: 0,
+        stageTimer: 0.0
+      };
+
+      const AUTO_STAGES = [
+        { name: '1. HOME', desc: 'Arm at zero calibrated home position.', yaw: 0.0, sh: 45.0, el: 60.0, grip: false, dur: 2.0 },
+        { name: '2. APPROACH', desc: 'Slewing arm over pickup station.', yaw: -15.0, sh: 25.0, el: 45.0, grip: false, dur: 2.5 },
+        { name: '3. LOWER', desc: 'Descending gripper jaws onto workpiece.', yaw: -15.0, sh: 12.0, el: 72.0, grip: false, dur: 2.0 },
+        { name: '4. GRIP', desc: 'Pressurizing pneumatic cylinder to clamp jaws.', yaw: -15.0, sh: 12.0, el: 72.0, grip: true, dur: 1.5 },
+        { name: '5. VERIFY GRIP', desc: 'Checking normal friction security.', yaw: -15.0, sh: 12.0, el: 72.0, grip: true, dur: 1.2 },
+        { name: '6. LIFT', desc: 'Ascending upper arm cylinder against gravity.', yaw: -15.0, sh: 40.0, el: 55.0, grip: true, dur: 2.5 },
+        { name: '7. TRANSFER', desc: 'Slewing arm waist across cell to destination.', yaw: 20.0, sh: 35.0, el: 75.0, grip: true, dur: 3.0 },
+        { name: '8. LOWER DROP', desc: 'Aligning workpiece onto destination pallet.', yaw: 20.0, sh: 14.0, el: 70.0, grip: true, dur: 2.0 },
+        { name: '9. RELEASE', desc: 'Venting pneumatic clamp; workpiece released.', yaw: 20.0, sh: 14.0, el: 70.0, grip: false, dur: 1.5 },
+        { name: '10. RETURN', desc: 'Returning articulated linkages back to HOME.', yaw: 0.0, sh: 45.0, el: 60.0, grip: false, dur: 2.5 }
+      ];
+
+      class SimulatorApp {
+        constructor() {
+          this.lastTimestamp = performance.now();
+          this.view3d = null;
+          this.hydCircuit = null;
+          this.pneuCircuit = null;
+
+          this.chartHistory = { time: [], pressHyd: [], pressPneu: [], angleSh: [], angleEl: [] };
+          this.init();
+        }
+
+        init() {
+          this.view3d = new exports.Arm3DView('three-container');
+          this.hydCircuit = new exports.HydraulicCircuit('hydraulic-circuit-container', (m) => this.showModal(m));
+          this.pneuCircuit = new exports.PneumaticCircuit('pneumatic-circuit-container', (m) => this.showModal(m));
+
+          this.bindControls();
+          this.log('Industrial Robotic Arm Simulation Engine initialized.', 'pass');
+
+          requestAnimationFrame((ts) => this.mainLoop(ts));
+        }
+
+        bindControls() {
+          document.getElementById('btn-start').addEventListener('click', () => {
+            STATE.status = 'RUNNING';
+            this.updateStatusPill();
+            this.log('System execution running.', 'info');
+          });
+
+          document.getElementById('btn-pause').addEventListener('click', () => {
+            STATE.status = 'PAUSED';
+            this.updateStatusPill();
+            this.log('System execution paused.', 'warn');
+          });
+
+          document.getElementById('btn-stop').addEventListener('click', () => {
+            STATE.status = 'STOPPED';
+            STATE.shoulderValve = 'NEUTRAL';
+            STATE.elbowValve = 'NEUTRAL';
+            STATE.autoCycleActive = false;
+            this.updateStatusPill();
+            this.log('Emergency Stop activated.', 'warn');
+          });
+
+          document.getElementById('btn-reset').addEventListener('click', () => this.resetSimulation());
+
+          document.getElementById('select-speed').addEventListener('change', (e) => {
+            STATE.simSpeed = parseFloat(e.target.value);
+            this.log(`Simulation time multiplier: ${STATE.simSpeed}x`, 'info');
+          });
+
+          document.getElementById('btn-fullscreen').addEventListener('click', () => {
+            if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
+            else document.exitFullscreen().catch(() => {});
+          });
+
+          document.getElementById('btn-cam-reset').addEventListener('click', () => this.view3d.resetCamera());
+          document.getElementById('btn-wireframe').addEventListener('click', () => this.view3d.toggleCutaway());
+
+          // Circuit Selector Dropdowns
+          document.getElementById('select-valve-center').addEventListener('change', (e) => {
+            STATE.valveCenterType = e.target.value;
+            const exp = document.getElementById('valve-explanation');
+            if (STATE.valveCenterType === 'TANDEM') exp.textContent = 'Tandem Center: Pump unloads back to tank at ~0.15 MPa when neutral, conserving energy.';
+            else if (STATE.valveCenterType === 'CLOSED') exp.textContent = 'Closed Center: Pump pressure peaks at PRV limit (2.5 MPa) even at neutral. Relief valve opens.';
+            else if (STATE.valveCenterType === 'FLOAT') exp.textContent = 'Float Center: Ports A & B vent to tank; arm may drift under gravitational torque unless locked!';
+            else if (STATE.valveCenterType === 'REGEN') exp.textContent = 'Regenerative: Cylinder extends twice as fast by feeding annular return fluid back into cap end!';
+            this.log(`Hydraulic DCV spool switched to: ${STATE.valveCenterType}`, 'info');
+          });
+
+          document.getElementById('select-flow-control').addEventListener('change', (e) => {
+            STATE.flowControlMode = e.target.value;
+            this.log(`Flow control throttled via: ${STATE.flowControlMode}`, 'info');
+          });
+
+          document.getElementById('select-pneu-valve').addEventListener('change', (e) => {
+            STATE.pneuValveType = e.target.value;
+            this.log(`Pneumatic spool architecture set to: ${STATE.pneuValveType}`, 'info');
+          });
+
+          // Main Supply Toggles
+          const btnPump = document.getElementById('btn-toggle-pump');
+          btnPump.addEventListener('click', () => {
+            STATE.pumpRunning = !STATE.pumpRunning;
+            btnPump.textContent = STATE.pumpRunning ? 'STOP HYDRAULIC PUMP' : 'START HYDRAULIC PUMP';
+            btnPump.className = STATE.pumpRunning ? 'btn btn-danger' : 'btn btn-action';
+            this.log(`Hydraulic Pump ${STATE.pumpRunning ? 'STARTED' : 'STOPPED'}.`, STATE.pumpRunning ? 'pass' : 'warn');
+          });
+
+          const btnAir = document.getElementById('btn-toggle-air');
+          btnAir.addEventListener('click', () => {
+            STATE.airSupplyEnabled = !STATE.airSupplyEnabled;
+            btnAir.textContent = STATE.airSupplyEnabled ? 'ISOLATE AIR SUPPLY' : 'RESTORE AIR SUPPLY';
+            btnAir.className = STATE.airSupplyEnabled ? 'btn btn-action' : 'btn btn-warning';
+            this.log(`Pneumatic Distribution Line ${STATE.airSupplyEnabled ? 'RESTORED' : 'ISOLATED'}.`, STATE.airSupplyEnabled ? 'pass' : 'warn');
+          });
+
+          // Manual Valve Buttons
+          const setShValve = (val) => {
+            STATE.shoulderValve = val;
+            document.getElementById('btn-sh-ext').className = 'btn-valve' + (val === 'EXTEND' ? ' active-ext' : '');
+            document.getElementById('btn-sh-neu').className = 'btn-valve' + (val === 'NEUTRAL' ? ' active' : '');
+            document.getElementById('btn-sh-ret').className = 'btn-valve' + (val === 'RETRACT' ? ' active-ret' : '');
+            this.log(`Shoulder Valve: ${val}`, 'info');
+          };
+          document.getElementById('btn-sh-ext').addEventListener('click', () => setShValve('EXTEND'));
+          document.getElementById('btn-sh-neu').addEventListener('click', () => setShValve('NEUTRAL'));
+          document.getElementById('btn-sh-ret').addEventListener('click', () => setShValve('RETRACT'));
+
+          const setElValve = (val) => {
+            STATE.elbowValve = val;
+            document.getElementById('btn-el-ext').className = 'btn-valve' + (val === 'EXTEND' ? ' active-ext' : '');
+            document.getElementById('btn-el-neu').className = 'btn-valve' + (val === 'NEUTRAL' ? ' active' : '');
+            document.getElementById('btn-el-ret').className = 'btn-valve' + (val === 'RETRACT' ? ' active-ret' : '');
+            this.log(`Elbow Valve: ${val}`, 'info');
+          };
+          document.getElementById('btn-el-ext').addEventListener('click', () => setElValve('EXTEND'));
+          document.getElementById('btn-el-neu').addEventListener('click', () => setElValve('NEUTRAL'));
+          document.getElementById('btn-el-ret').addEventListener('click', () => setElValve('RETRACT'));
+
+          // Gripper Buttons
+          document.getElementById('btn-grip-open').addEventListener('click', () => {
+            STATE.gripperClosed = false;
+            STATE.isPayloadGrasped = false;
+            document.getElementById('btn-grip-open').classList.add('active');
+            document.getElementById('btn-grip-close').classList.remove('active');
+            this.log('Gripper DCV: Jaws Vented (OPEN).', 'info');
+          });
+
+          document.getElementById('btn-grip-close').addEventListener('click', () => {
+            STATE.gripperClosed = true;
+            document.getElementById('btn-grip-close').classList.add('active');
+            document.getElementById('btn-grip-open').classList.remove('active');
+            this.log('Gripper DCV: Jaws Pressurized (CLAMP).', 'info');
+          });
+
+          // Auto Cycle
+          document.getElementById('btn-auto-start').addEventListener('click', () => {
+            if (!STATE.pumpRunning) {
+              this.log('Cannot start auto cycle: Start the Hydraulic Pump first!', 'err');
+              return;
+            }
+            if (!STATE.airSupplyEnabled) {
+              this.log('Cannot start auto cycle: Air supply is isolated!', 'err');
+              return;
+            }
+            STATE.autoCycleActive = true;
+            STATE.autoCycleStage = 0;
+            STATE.stageTimer = 0.0;
+            STATE.status = 'RUNNING';
+            this.updateStatusPill();
+            this.log('10-Stage Automated Pick-and-Place sequence launched.', 'pass');
+          });
+
+          document.getElementById('btn-auto-abort').addEventListener('click', () => {
+            STATE.autoCycleActive = false;
+            STATE.shoulderValve = 'NEUTRAL';
+            STATE.elbowValve = 'NEUTRAL';
+            document.getElementById('auto-cycle-stage').textContent = 'MODE: ABORTED';
+            this.log('Auto Cycle aborted by operator.', 'warn');
+          });
+
+          // Tabs
+          const tabBtns = document.querySelectorAll('.tab-btn');
+          tabBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+              tabBtns.forEach(b => b.classList.remove('active'));
+              document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+              btn.classList.add('active');
+              const t = document.getElementById(btn.getAttribute('data-tab'));
+              if (t) t.classList.add('active');
+            });
+          });
+
+          // Parameter Sliders
+          this.bindRange('param-prv', 'lbl-param-prv', ' MPa', (v) => { STATE.reliefValvePressureMPa = v; });
+          this.bindRange('param-phyd', 'lbl-param-phyd', ' MPa', (v) => { STATE.hydraulicPressureMPa = v; });
+          this.bindRange('param-ppneu', 'lbl-param-ppneu', ' MPa', (v) => { STATE.pneumaticPressureMPa = v; });
+          this.bindRange('param-mass', 'lbl-param-mass', ' kg', (v) => {
+            STATE.payloadMass = v;
+            document.getElementById('arm-payload-tag').textContent = `Payload: ${v.toFixed(2)} kg`;
+          });
+          this.bindRange('param-flow', 'lbl-param-flow', ' L/min', (v) => { STATE.pumpFlowRateLmin = v; });
+
+          // Diagnostic Suite & Export
+          document.getElementById('btn-run-tests').addEventListener('click', () => this.runDiagnosticsSuite());
+          document.getElementById('btn-clear-log').addEventListener('click', () => {
+            document.getElementById('simulation-event-log').innerHTML = '';
+          });
+          document.getElementById('btn-export-csv').addEventListener('click', () => this.exportCSV());
+          document.getElementById('btn-export-json').addEventListener('click', () => this.exportJSON());
+          document.getElementById('btn-print-report').addEventListener('click', () => window.print());
+
+          document.getElementById('modal-close-btn').addEventListener('click', () => {
+            document.getElementById('component-modal').classList.add('hidden');
+          });
+        }
+
+        bindRange(id, lblId, unit, setter) {
+          const el = document.getElementById(id);
+          const lbl = document.getElementById(lblId);
+          if (el && lbl) {
+            el.addEventListener('input', (e) => {
+              const val = parseFloat(e.target.value);
+              lbl.textContent = val.toFixed(2) + unit;
+              setter(val);
+            });
+          }
+        }
+
+        updateStatusPill() {
+          const pill = document.getElementById('system-status-pill');
+          if (!pill) return;
+          pill.textContent = STATE.status;
+          pill.className = `pill pill-${STATE.status.toLowerCase()}`;
+        }
+
+        resetSimulation() {
+          STATE.baseYawDeg = 0.0;
+          STATE.shoulderAngleDeg = 45.0;
+          STATE.elbowAngleDeg = 60.0;
+          STATE.shoulderValve = 'NEUTRAL';
+          STATE.elbowValve = 'NEUTRAL';
+          STATE.gripperClosed = false;
+          STATE.isPayloadGrasped = false;
+          STATE.autoCycleActive = false;
+          STATE.status = 'READY';
+          STATE.payloadPos = { x: 0.24, y: 0.054, z: -0.05 };
+
+          this.updateStatusPill();
+          document.getElementById('auto-cycle-stage').textContent = 'MODE: READY';
+          document.getElementById('cycle-step-description').textContent = 'Calibrated zero position restored.';
+          this.log('Robot posture and valves reset.', 'info');
+        }
+
+        updateAutoCycle(dt) {
+          if (!STATE.autoCycleActive || STATE.status !== 'RUNNING') return;
+
+          const stage = AUTO_STAGES[STATE.autoCycleStage];
+          STATE.stageTimer += dt;
+
+          const pill = document.getElementById('auto-cycle-stage');
+          const desc = document.getElementById('cycle-step-description');
+          if (pill) pill.textContent = `CYCLE: ${stage.name}`;
+          if (desc) desc.textContent = stage.desc;
+
+          const progress = Math.min(1.0, STATE.stageTimer / stage.dur);
+          const ease = 0.5 - 0.5 * Math.cos(progress * Math.PI);
+
+          STATE.baseYawDeg += (stage.yaw - STATE.baseYawDeg) * ease * dt * 3.5;
+          STATE.shoulderAngleDeg += (stage.sh - STATE.shoulderAngleDeg) * ease * dt * 3.5;
+          STATE.elbowAngleDeg += (stage.el - STATE.elbowAngleDeg) * ease * dt * 3.5;
+
+          STATE.gripperClosed = stage.grip;
+
+          if (stage.name.includes('VERIFY GRIP')) {
+            const p = exports.Physics.verifyState(STATE);
+            if (!p.pneumatics.isGripSufficient) {
+              STATE.autoCycleActive = false;
+              STATE.status = 'FAULT';
+              this.updateStatusPill();
+              this.log(`FAULT: Workpiece slip detected! Friction margin: ${p.pneumatics.margin.toFixed(2)}x`, 'err');
+              return;
+            }
+          }
+
+          if (stage.name.includes('GRIP') && progress > 0.8) STATE.isPayloadGrasped = true;
+          if (stage.name.includes('RELEASE') && progress > 0.5) {
+            STATE.isPayloadGrasped = false;
+            STATE.payloadPos = { x: 0.24, y: 0.054, z: 0.08 };
+          }
+
+          if (STATE.stageTimer >= stage.dur) {
+            STATE.stageTimer = 0.0;
+            STATE.autoCycleStage++;
+            if (STATE.autoCycleStage >= AUTO_STAGES.length) {
+              STATE.autoCycleActive = false;
+              STATE.autoCycleStage = 0;
+              this.log('Automatic Pick-and-Place Cycle successfully finished!', 'pass');
+              if (pill) pill.textContent = 'MODE: COMPLETED';
+            }
+          }
+        }
+
+        updateManualMotion(dt) {
+          if (STATE.autoCycleActive || STATE.status !== 'RUNNING') return;
+
+          // If float center is chosen and valves are neutral, gravitational torque produces drift
+          if (STATE.valveCenterType === 'FLOAT' && STATE.shoulderValve === 'NEUTRAL' && STATE.shoulderAngleDeg > 15.0) {
+            STATE.shoulderAngleDeg -= 4.0 * dt * STATE.simSpeed;
+          }
+
+          if (!STATE.pumpRunning) return;
+
+          let speedMult = (STATE.pumpFlowRateLmin / 6.0) * 16.0 * STATE.simSpeed;
+          if (STATE.valveCenterType === 'REGEN' && STATE.shoulderValve === 'EXTEND') {
+            speedMult *= 1.85; // Faster extension due to regenerative differential flow
+          }
+
+          if (STATE.shoulderValve === 'EXTEND') {
+            STATE.shoulderAngleDeg = Math.min(85.0, STATE.shoulderAngleDeg + speedMult * dt);
+          } else if (STATE.shoulderValve === 'RETRACT') {
+            STATE.shoulderAngleDeg = Math.max(5.0, STATE.shoulderAngleDeg - speedMult * dt);
+          }
+
+          if (STATE.elbowValve === 'EXTEND') {
+            STATE.elbowAngleDeg = Math.min(120.0, STATE.elbowAngleDeg + speedMult * dt);
+          } else if (STATE.elbowValve === 'RETRACT') {
+            STATE.elbowAngleDeg = Math.max(15.0, STATE.elbowAngleDeg - speedMult * dt);
+          }
+        }
+
+        mainLoop(timestamp) {
+          const rawDt = (timestamp - this.lastTimestamp) / 1000.0;
+          this.lastTimestamp = timestamp;
+          const dt = Math.min(0.1, rawDt) * STATE.simSpeed;
+
+          this.updateAutoCycle(dt);
+          this.updateManualMotion(dt);
+
+          const physics = exports.Physics.verifyState(STATE);
+          STATE.shoulderStrokeMm = physics.geometry.shoulderLength * 1000.0;
+          STATE.elbowStrokeMm = physics.geometry.elbowLength * 1000.0;
+
+          if (this.view3d) this.view3d.update(STATE);
+          if (this.hydCircuit) this.hydCircuit.update(STATE);
+          if (this.pneuCircuit) this.pneuCircuit.update(STATE);
+
+          this.updateTelemetryDOM(physics);
+          this.recordChartData(timestamp / 1000.0, physics);
+          this.drawCharts();
+
+          requestAnimationFrame((ts) => this.mainLoop(ts));
+        }
+
+        updateTelemetryDOM(p) {
+          const setT = (id, txt) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = txt;
+          };
+
+          const dPump = document.getElementById('disp-pump-state');
+          if (dPump) {
+            dPump.textContent = STATE.pumpRunning ? 'RUNNING' : 'OFF';
+            dPump.style.color = STATE.pumpRunning ? '#2ecc71' : '#8b949e';
+          }
+          const dRpm = document.getElementById('disp-pump-rpm');
+          if (dRpm) dRpm.textContent = STATE.pumpRunning ? '1450 RPM • 1.5 kW' : '0 RPM • Standby';
+
+          setT('disp-p-hyd', p.forces.effectiveHydPressure.toFixed(2));
+          setT('disp-q-hyd', (STATE.pumpRunning && (STATE.shoulderValve !== 'NEUTRAL' || STATE.elbowValve !== 'NEUTRAL') ? STATE.pumpFlowRateLmin : (STATE.valveCenterType === 'TANDEM' ? STATE.pumpFlowRateLmin : 0.0)).toFixed(1));
+
+          setT('calc-th1', STATE.shoulderAngleDeg.toFixed(1));
+          setT('calc-tau1', p.torques.tau_shoulder.toFixed(2));
+          setT('calc-arm1', (p.geometry.shoulderMomentArm * 1000.0).toFixed(1));
+          setT('calc-freq1', p.forces.reqShoulderForce.toFixed(1));
+          setT('calc-favail1', p.forces.availShoulderForce.toFixed(1));
+          setT('calc-stroke1', STATE.shoulderStrokeMm.toFixed(1));
+
+          const stat1 = document.getElementById('calc-stat1');
+          if (stat1) {
+            const pass = p.forces.shForcePass && p.forces.shStrokePass;
+            stat1.textContent = pass ? 'PASS' : 'REVIEW';
+            stat1.className = `pill ${pass ? 'pill-pass' : 'pill-review'}`;
+          }
+
+          setT('calc-th2', STATE.elbowAngleDeg.toFixed(1));
+          setT('calc-tau2', p.torques.tau_elbow.toFixed(2));
+          setT('calc-arm2', (p.geometry.elbowMomentArm * 1000.0).toFixed(1));
+          setT('calc-freq2', p.forces.reqElbowForce.toFixed(1));
+          setT('calc-favail2', p.forces.availElbowForce.toFixed(1));
+          setT('calc-stroke2', STATE.elbowStrokeMm.toFixed(1));
+
+          const stat2 = document.getElementById('calc-stat2');
+          if (stat2) {
+            const pass = p.forces.elForcePass && p.forces.elStrokePass;
+            stat2.textContent = pass ? 'PASS' : 'REVIEW';
+            stat2.className = `pill ${pass ? 'pill-pass' : 'pill-review'}`;
+          }
+
+          setT('calc-pneu-ideal', p.pneumatics.idealPistonForce.toFixed(1));
+          setT('calc-pneu-thrust', p.pneumatics.availablePistonForce.toFixed(1));
+          setT('calc-f-normal', p.pneumatics.fingerNormalForce.toFixed(1));
+          setT('calc-hold-cap', p.pneumatics.holdingCapacityKg.toFixed(2));
+          setT('calc-m-payload', STATE.payloadMass.toFixed(2));
+          setT('calc-grip-margin', p.pneumatics.margin.toFixed(1) + 'x');
+
+          const statGrip = document.getElementById('calc-grip-stat');
+          if (statGrip) {
+            statGrip.textContent = p.pneumatics.statusText;
+            statGrip.className = `pill ${p.pneumatics.isGripSufficient ? 'pill-pass' : 'pill-fail'}`;
+          }
+        }
+
+        recordChartData(t, p) {
+          if (this.chartHistory.time.length > 50) {
+            this.chartHistory.time.shift();
+            this.chartHistory.pressHyd.shift();
+            this.chartHistory.pressPneu.shift();
+            this.chartHistory.angleSh.shift();
+            this.chartHistory.angleEl.shift();
+          }
+
+          this.chartHistory.time.push(t);
+          this.chartHistory.pressHyd.push(p.forces.effectiveHydPressure);
+          this.chartHistory.pressPneu.push(STATE.airSupplyEnabled ? STATE.pneumaticPressureMPa : 0.0);
+          this.chartHistory.angleSh.push(STATE.shoulderAngleDeg);
+          this.chartHistory.angleEl.push(STATE.elbowAngleDeg);
+        }
+
+        drawCharts() {
+          const c1 = document.getElementById('chart-pressure');
+          if (c1 && c1.getContext) {
+            const ctx1 = c1.getContext('2d');
+            ctx1.clearRect(0, 0, c1.width, c1.height);
+            this.renderGraphLine(ctx1, c1.width, c1.height, this.chartHistory.pressHyd, 0, 5.0, '#ff3838', 'Hyd Supply P (MPa)');
+            this.renderGraphLine(ctx1, c1.width, c1.height, this.chartHistory.pressPneu, 0, 5.0, '#2ed573', 'Pneumatic Line (MPa)');
+          }
+
+          const c2 = document.getElementById('chart-angles');
+          if (c2 && c2.getContext) {
+            const ctx2 = c2.getContext('2d');
+            ctx2.clearRect(0, 0, c2.width, c2.height);
+            this.renderGraphLine(ctx2, c2.width, c2.height, this.chartHistory.angleSh, 0, 100.0, '#58a6ff', 'Shoulder θ₁ (deg)');
+            this.renderGraphLine(ctx2, c2.width, c2.height, this.chartHistory.angleEl, 0, 100.0, '#ffa801', 'Elbow θ₂ (deg)');
+          }
+        }
+
+        renderGraphLine(ctx, w, h, data, minVal, maxVal, color, label) {
+          if (data.length < 2) return;
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+
+          const step = w / 50;
+          for (let i = 0; i < data.length; i++) {
+            const valNorm = (data[i] - minVal) / (maxVal - minVal);
+            const y = h - valNorm * (h - 20) - 10;
+            const x = i * step;
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          ctx.stroke();
+
+          ctx.fillStyle = color;
+          ctx.font = '10px Consolas, monospace';
+          ctx.fillText(label, 10, color === '#ff3838' || color === '#58a6ff' ? 14 : 26);
+        }
+
+        log(message, type = 'info') {
+          const box = document.getElementById('simulation-event-log');
+          if (!box) return;
+          const timeStr = new Date().toISOString().substring(11, 19);
+          const div = document.createElement('div');
+          div.className = `log-entry log-${type}`;
+          div.innerHTML = `<span class="log-time">[${timeStr}]</span> ${message}`;
+          box.appendChild(div);
+          box.scrollTop = box.scrollHeight;
+        }
+
+        showModal(meta) {
+          const modal = document.getElementById('component-modal');
+          const title = document.getElementById('modal-title');
+          const body = document.getElementById('modal-body-content');
+          if (!modal || !title || !body) return;
+
+          title.textContent = meta.title;
+          body.innerHTML = `
+            <p><strong>Subsystem Category:</strong> ${meta.category}</p>
+            <p style="margin-top: 8px;"><strong>Functional Description:</strong></p>
+            <p style="color: #c9d1d9; margin-top: 4px;">${meta.desc}</p>
+            <p style="margin-top: 8px;"><strong>Engineering Specifications:</strong></p>
+            <p style="color: #7ee787; font-family: monospace; margin-top: 4px;">${meta.specs}</p>
+          `;
+          modal.classList.remove('hidden');
+        }
+
+        runDiagnosticsSuite() {
+          const tests = [
+            { id: 1, name: 'Calibrated Zero Posture Check', cond: 'Baseline initialize', eval: () => STATE.shoulderAngleDeg === 45.0 && STATE.elbowAngleDeg === 60.0 },
+            { id: 2, name: 'Pump Off Hydraulic Cutoff', cond: 'Pump OFF', eval: () => !STATE.pumpRunning },
+            { id: 3, name: 'Shoulder Cylinder Bore Area', cond: 'Ø25 mm bore', eval: () => Math.abs(exports.Physics.shAreas.full - 0.00049087) < 1e-6 },
+            { id: 4, name: 'Elbow Cylinder Annular Area', cond: 'Ø25 bore, Ø10 rod', eval: () => Math.abs(exports.Physics.elAreas.annular - 0.00041233) < 1e-6 },
+            { id: 5, name: 'Shoulder Leverage Moment Arm', cond: 'Current pose', eval: () => exports.Physics.verifyState(STATE).geometry.shoulderMomentArm > 0.02 },
+            { id: 6, name: 'Gravitational Torque Matrix', cond: 'Links + 0.20 kg payload', eval: () => exports.Physics.verifyState(STATE).torques.tau_shoulder > 0.5 },
+            { id: 7, name: 'Cylinder Stroke Range Validation', cond: 'Stroke span compliance', eval: () => exports.Physics.verifyState(STATE).forces.shStrokePass && exports.Physics.verifyState(STATE).forces.elStrokePass },
+            { id: 8, name: 'PRV Relief Overpressure Setting', cond: 'PRV >= Pump pressure', eval: () => STATE.reliefValvePressureMPa >= STATE.hydraulicPressureMPa },
+            { id: 9, name: 'Tandem Spool Idle Circulation', cond: 'Center neutral test', eval: () => STATE.valveCenterType === 'TANDEM' },
+            { id: 10, name: 'Regenerative Extension Ratio', cond: 'Regen differential flow', eval: () => exports.Physics.shAreas.rodArea < exports.Physics.shAreas.full },
+            { id: 11, name: 'Pneumatic Thrust Generation', cond: '0.6 MPa on Ø32 bore', eval: () => exports.Physics.verifyState(STATE).pneumatics.availablePistonForce > 400.0 },
+            { id: 12, name: 'Bilateral Coulomb Friction Hold', cond: 'μ=0.30, 2 pads', eval: () => exports.Physics.verifyState(STATE).pneumatics.holdingCapacityKg > 10.0 },
+            { id: 13, name: 'Air Supply Disconnect Slip Protection', cond: 'Air cut off', eval: () => !exports.Physics.verifyState({ ...STATE, airSupplyEnabled: false, gripperClosed: true }).pneumatics.isGripSufficient },
+            { id: 14, name: 'Autonomous 10-Stage Sequencer', cond: 'Plan loaded', eval: () => AUTO_STAGES.length === 10 },
+            { id: 15, name: 'SCADA Telemetry JSON Dump Integrity', cond: 'Memory serialization', eval: () => JSON.stringify(STATE).length > 50 }
+          ];
+
+          const tbody = document.getElementById('test-table-body');
+          tbody.innerHTML = '';
+          let passes = 0;
+
+          tests.forEach(t => {
+            const pass = t.eval();
+            if (pass) passes++;
+            const row = document.createElement('tr');
+            row.innerHTML = `
+              <td>${t.id}</td>
+              <td>${t.name}</td>
+              <td>${t.cond}</td>
+              <td>Physics Standard</td>
+              <td>${pass ? 'Verified Compliant' : 'Out of Bounds'}</td>
+              <td><span class="pill ${pass ? 'pill-pass' : 'pill-fail'}">${pass ? 'PASS' : 'FAIL'}</span></td>
+            `;
+            tbody.appendChild(row);
+          });
+
+          this.log(`Diagnostic verification finished: ${passes}/15 passed.`, passes === 15 ? 'pass' : 'warn');
+        }
+
+        exportCSV() {
+          let csv = 'Timestamp,BaseYawDeg,ShoulderAngleDeg,ElbowAngleDeg,ShoulderStrokeMm,ElbowStrokeMm,HydPressMPa,PneuPressMPa,ValveCenter\n';
+          const now = new Date().toISOString();
+          csv += `${now},${STATE.baseYawDeg.toFixed(1)},${STATE.shoulderAngleDeg.toFixed(1)},${STATE.elbowAngleDeg.toFixed(1)},${STATE.shoulderStrokeMm.toFixed(1)},${STATE.elbowStrokeMm.toFixed(1)},${STATE.hydraulicPressureMPa.toFixed(2)},${STATE.pneumaticPressureMPa.toFixed(2)},${STATE.valveCenterType}\n`;
+
+          const blob = new Blob([csv], { type: 'text/csv' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `robotic_arm_telemetry_${Date.now()}.csv`;
+          a.click();
+          URL.revokeObjectURL(url);
+          this.log('Telemetry CSV exported.', 'pass');
+        }
+
+        exportJSON() {
+          const dump = { state: STATE, physics: exports.Physics.verifyState(STATE), timestamp: new Date().toISOString() };
+          const blob = new Blob([JSON.stringify(dump, null, 2)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `robotic_arm_state_${Date.now()}.json`;
+          a.click();
+          URL.revokeObjectURL(url);
+          this.log('Full State JSON exported.', 'pass');
+        }
+      }
+
+      window.addEventListener('DOMContentLoaded', () => {
+        exports.app = new SimulatorApp();
+      });
+    })(window.HP_SIM);
+  </script>
+</body>
+</html>

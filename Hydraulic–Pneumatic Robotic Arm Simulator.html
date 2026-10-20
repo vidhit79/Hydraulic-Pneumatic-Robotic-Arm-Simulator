@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hydraulic–Pneumatic Robotic Arm Simulator</title>
+<style>
+:root{--bg:#0d1218;--pn:#151d27;--ln:#26323f;--tx:#e3e9ef;--mu:#8b99a8;--hp:#ff7a45;--lp:#4aa3ff;--air:#3ecf6e;--off:#5b6673;--ok:#3ecf6e;--bad:#ff5c5c;--rev:#f0b429;--ac:#ffd24a;--bt:#1f2b38;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#eef1f4;--pn:#fff;--ln:#cdd5dd;--tx:#18222d;--mu:#566472;--bt:#e6ebf0;--off:#98a3af;--ac:#b8860b}}
+:root[data-theme="light"]{--bg:#eef1f4;--pn:#fff;--ln:#cdd5dd;--tx:#18222d;--mu:#566472;--bt:#e6ebf0;--off:#98a3af;--ac:#b8860b}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:13px/1.4 "Segoe UI",system-ui,sans-serif}
+header{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--ln)}
+h1{font-size:17px;margin:0;letter-spacing:.02em}h2{font-size:13px;margin:0 0 8px;color:var(--mu);font-weight:600}
+small,.mu{color:var(--mu)}
+.pill{padding:3px 12px;border-radius:99px;font-weight:700;background:var(--bt);border:1px solid var(--ln)}
+.pill.RUNNING{color:var(--ok)}.pill.FAULT{color:var(--bad)}.pill.PAUSED,.pill.READY{color:var(--rev)}
+main{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:10px;padding:10px}
+.p{background:var(--pn);border:1px solid var(--ln);border-radius:8px;padding:10px;min-width:0}
+.w2{grid-column:1/-1}
+button,select,input{font:inherit;color:var(--tx);background:var(--bt);border:1px solid var(--ln);border-radius:5px;padding:5px 9px}
+button{cursor:pointer}button:hover{border-color:var(--ac)}button.on{border-color:var(--ac);color:var(--ac)}
+input[type=range]{padding:0;width:100%}input[type=number]{width:74px}
+.row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;align-items:center}
+.sl{display:grid;grid-template-columns:132px 1fr 62px;gap:6px;align-items:center;margin:2px 0}
+.sl output{font-family:Consolas,"Cascadia Mono",monospace;text-align:right}
+#view{position:relative;height:340px;background:#0b1016;border-radius:6px;overflow:hidden;touch-action:none;color:#e3e9ef}
+#view canvas{display:block;width:100%;height:100%}
+.lb{position:absolute;font-size:10px;background:#000a;color:#fff;padding:1px 5px;border-radius:3px;pointer-events:none;white-space:nowrap}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 10px}.kv b{font-family:Consolas,"Cascadia Mono",monospace;font-weight:600}
+#msg{margin-top:8px;padding:6px 8px;border-left:3px solid var(--rev);background:var(--bt)}
+.bar{height:6px;background:var(--bt);border-radius:3px;overflow:hidden}.bar i{display:block;height:100%;background:var(--ac)}
+svg{width:100%;height:auto;display:block}
+.ln{fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.ln.hp{stroke:var(--hp)}.ln.lp{stroke:var(--lp)}.ln.air{stroke:var(--air)}.ln.ex{stroke:var(--air);opacity:.4}.ln.off{stroke:var(--off)}
+.ln.on{stroke-dasharray:7 5;animation:fl .6s linear infinite}@keyframes fl{to{stroke-dashoffset:-12}}.ln.rev{animation-direction:reverse}
+@media(prefers-reduced-motion:reduce){.ln.on{animation:none}}
+.cmp{fill:var(--pn);stroke:var(--tx);stroke-width:1.4;cursor:pointer}.cmp:hover,.sel .cmp{stroke:var(--ac)}
+.cell{fill:none;stroke:var(--mu);stroke-width:1;pointer-events:all;cursor:pointer}.cell.sel{fill:var(--ac);fill-opacity:.35}
+.tx{font:9px "Segoe UI",sans-serif;fill:var(--mu);pointer-events:none}.tb{font:10px "Segoe UI",sans-serif;fill:var(--tx);pointer-events:none}
+.lit{fill:var(--rev)!important}
+.lg{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--mu)}.lg i{display:inline-block;width:18px;height:4px;margin-right:4px;vertical-align:middle}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:6px}
+.t{background:var(--bt);border-radius:5px;padding:5px 7px}.t b{font:600 15px Consolas,"Cascadia Mono",monospace}.t i{font-style:normal;color:var(--mu);margin-left:3px}.t span{display:block;font-size:10px;color:var(--mu)}
+table{width:100%;border-collapse:collapse}td,th{padding:3px 6px;border-bottom:1px solid var(--ln);text-align:left;vertical-align:top}
+.PASS{color:var(--ok);font-weight:700}.FAIL{color:var(--bad);font-weight:700}.REVIEW{color:var(--rev);font-weight:700}
+#log{height:150px;overflow:auto;background:var(--bt);padding:6px;font:11px Consolas,"Cascadia Mono",monospace;white-space:pre-wrap;border-radius:5px}
+canvas.g{width:100%;height:110px;background:var(--bt);border-radius:5px;margin-top:6px}
+@media(max-width:900px){main{grid-template-columns:minmax(0,1fr)}.sl{grid-template-columns:100px 1fr 56px}}
+@media print{body{background:#fff;color:#000}.noprint,#view{display:none}.p{break-inside:avoid;border-color:#999;background:#fff}}
+</style>
+</head>
+<body>
+<header>
+ <div><h1>HYDRAULIC–PNEUMATIC ROBOTIC ARM SIMULATOR</h1><small>Interactive Mechanism, Hydraulic Circuit, Pneumatic Gripper and Force Analysis</small></div>
+ <span id="st" class="pill">READY</span>
+ <div class="row noprint" style="margin:0;margin-left:auto">
+  <button id="bStart">SYSTEM START</button><button id="bPause">PAUSE</button><button id="bStop">STOP</button><button id="bReset">RESET</button><button id="bFs">FULLSCREEN</button>
+  <label>Speed <select id="spd"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select></label>
+ </div>
+</header>
+<main>
+ <section class="p"><h2>Robotic arm (side-plane kinematics, drag to orbit, wheel to zoom)</h2><div id="view"></div></section>
+ <section class="p"><h2>Operating panel</h2>
+  <div class="kv" id="ops"></div>
+  <div class="bar" style="margin-top:8px"><i id="prog" style="width:0"></i></div>
+  <div id="msg"></div>
+  <p class="mu" style="font-size:11px">PASS means the configured checks passed inside this simplified model. It is not a safety certification of any physical design. Values marked ≈ are quasi-static estimates, not dynamic simulation.</p>
+ </section>
+ <section class="p"><h2>Hydraulic circuit (illustrative, not a verified industrial design)</h2>
+  <svg id="hyd" viewBox="0 0 440 250"></svg>
+  <div class="lg"><span><i style="background:var(--hp)"></i>high pressure</span><span><i style="background:var(--lp)"></i>return/low</span><span><i style="background:var(--air)"></i>air supply</span><span><i style="background:var(--off)"></i>inactive/blocked</span><span><i style="background:var(--ac)"></i>selected/energised</span></div><p class="mu noprint" style="font-size:11px;margin:4px 0 0">Click a spool cell of a 4/3 valve (↑↓ extend, ⊤ ⊤ neutral, ✕ retract) to shift it: the cylinder, the arm and the flow direction follow live. Pump must be ON for motion.</p>
+ </section>
+ <section class="p"><h2>Pneumatic gripper circuit</h2><svg id="pn" viewBox="0 0 440 250"></svg><p class="mu noprint" style="font-size:11px;margin:4px 0 0">Click the CLOSE or OPEN cell of the 5/2 valve to shift it. Air supply must be ON for the gripper to move.</p></section>
+ <section class="p w2"><h2>Component details (click any component in a circuit)</h2><div id="det" class="mu">Click a component.</div></section>
+ <section class="p noprint"><h2>Controls</h2>
+  <div class="row"><button id="bPump">PUMP</button><button id="bAir">AIR SUPPLY</button><button id="bHome">HOME</button><button id="bAuto">AUTO CYCLE</button></div>
+  <div class="row"><button data-h="s,1">SHOULDER UP</button><button data-h="s,-1">SHOULDER DOWN</button><button data-h="e,1">ELBOW EXTEND</button><button data-h="e,-1">ELBOW RETRACT</button><small>(hold)</small></div>
+  <div class="row"><button id="bGo">GRIPPER OPEN</button><button id="bGc">GRIPPER CLOSE</button><button id="bPick">PICK OBJECT</button><button id="bRel">RELEASE OBJECT</button></div>
+  <div class="row"><label>Shoulder valve <select id="vS"><option value="0">NEUTRAL</option><option value="1">EXTEND</option><option value="-1">RETRACT</option></select></label>
+  <label>Elbow valve <select id="vE"><option value="0">NEUTRAL</option><option value="1">EXTEND</option><option value="-1">RETRACT</option></select></label></div>
+  <div id="sls"></div>
+  <div class="row" style="margin-top:6px"><label>Efficiency hyd <input id="eff" type="number" step="0.01" min="0.3" max="1"></label><label>Efficiency air <input id="effA" type="number" step="0.01" min="0.3" max="1"></label><label>Grip MA <input id="MA" type="number" step="0.05" min="0.05" max="2"></label><label>μ <input id="mu" type="number" step="0.05" min="0.05" max="1.2"></label><label>Grip SF <input id="SF" type="number" step="0.1" min="1" max="5"></label></div>
+  <div class="row"><label>Pick x (mm) <input id="pickX" type="number"></label><label>Place x (mm) <input id="placeX" type="number"></label><label>Lift y (mm) <input id="liftY" type="number"></label></div>
+ </section>
+ <section class="p"><h2>Live measurements</h2><div class="tiles" id="tiles"></div>
+  <canvas id="g1" class="g" width="520" height="110"></canvas><canvas id="g2" class="g" width="520" height="110"></canvas>
+  <p class="mu" style="font-size:11px">Joint angles, cylinder lengths, flow and speed are integrated every time step. Pressures, forces and torques are quasi-static estimates from the current pose. No transients, leakage, cavitation or temperature effects are modelled.</p>
+ </section>
+ <section class="p"><h2>Force and validation checks</h2><table id="chk"></table></section>
+ <section class="p"><h2>Event log, export, self-test</h2><div id="log"></div>
+  <div class="row noprint" style="margin-top:6px"><button id="bClr">CLEAR LOG</button><button id="bCsv">EXPORT CSV</button><button id="bJson">EXPORT JSON</button><button id="bTxt">SUMMARY .TXT</button><button id="bPrint">PRINT REPORT</button><button id="bTest">RUN SELF-TESTS</button></div>
+  <table id="tests"><tr><td class="mu">Self-tests have not been run in this session.</td></tr></table>
+ </section>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+'use strict';
+/* ===== Geometry and constants (SI units, angles in degrees at the UI boundary) ===== */
+const $=i=>document.getElementById(i),D2R=Math.PI/180,G=9.81;
+const S0=[0,.12],L1=.25,L2=.2,LG=.06,M1=.5,M2=.35,MG=.25,HOME={s:70,e:-130},OBJW=.04,GAPMAX=.07;
+const rot=(a,v)=>[v[0]*Math.cos(a)-v[1]*Math.sin(a),v[0]*Math.sin(a)+v[1]*Math.cos(a)];
+/* Cylinder mounts. s: fixed pivot B (world) and rod-end pin a (local to upper arm). e: B local to upper arm (rel. elbow), a local to forearm (rel. elbow).
+   Mount positions were chosen so the moment arm stays above ~20 mm over the whole joint range (no dead-centre). */
+const C0={s:{n:'Shoulder',bore:.025,rod:.01,B:[.02,.03],a:[.11,0],Lmin:.105,Lmax:.205,lim:[-10,78]},
+          e:{n:'Elbow',bore:.025,rod:.01,B:[-.2,-.065],a:[.088,-.016],Lmin:.12,Lmax:.295,lim:[-140,0]}};
+const C={s:{...C0.s},e:{...C0.e}};
+let S,P,LOG=[],REC=[],lastW=-9,lastRec=0,sel='',tests=null;
+function def(){
+ S={run:'READY',pump:false,air:false,man:{s:0,e:0},tg:{s:null,e:null},V:{s:0,e:0},th:{...HOME},Ps:2,Pr:2.5,Q:.8,Pa:.6,mass:.2,close:false,gap:GAPMAX,att:false,gripFail:false,
+ obj:{x:.33,y:.02,vy:0},speed:+($('spd')?$('spd').value:1),t:0,t0:0,stage:-1,st0:0,auto:false,fault:'',msg:'Ready. Press SYSTEM START or switch the pump on.',prev:'READY',
+ relief:false,stall:{s:false,e:false},pc:{s:0,e:0},sup:0,qAct:0};
+ P={eff:.85,effA:.8,MA:.3,mu:.4,SF:1.5,pickX:330,placeX:200,liftY:140};
+ Object.assign(C.s,C0.s);Object.assign(C.e,C0.e);REC=[];lastRec=0;
+}
+const note=t=>{LOG.push('['+S.t.toFixed(1).padStart(6)+' s] '+t);if(LOG.length>400)LOG.shift();};
+function warn(t){if(S.msg!==t){S.msg=t;note(t);}}
+function fault(t){if(S.run==='FAULT')return;S.fault=t;S.run='FAULT';S.auto=false;S.stage=-1;S.tg={s:null,e:null};S.man={s:0,e:0};S.msg='FAULT: '+t;note('FAULT: '+t);}
+/* ===== Kinematics ===== */
+function pose(t1,t2){const a1=t1*D2R,a2=(t1+t2)*D2R,E=[S0[0]+L1*Math.cos(a1),S0[1]+L1*Math.sin(a1)],e=[Math.cos(a2),Math.sin(a2)];
+ return{a1,a2,E,e,end:[E[0]+L2*e[0],E[1]+L2*e[1]],tip:[E[0]+(L2+LG)*e[0],E[1]+(L2+LG)*e[1]]};}
+/* Cylinder length from its two mount points; cr = perpendicular moment arm = (r x u), r from joint axis to rod-end pin, u unit vector of the line of action */
+function cyl(k,t1,t2){const p=pose(t1,t2);let J,A,B;
+ if(k==='s'){const r=rot(p.a1,C.s.a);J=S0;A=[S0[0]+r[0],S0[1]+r[1]];B=C.s.B;}
+ else{J=p.E;const r1=rot(p.a1,C.e.B),r2=rot(p.a2,C.e.a);B=[J[0]+r1[0],J[1]+r1[1]];A=[J[0]+r2[0],J[1]+r2[1]];}
+ const dx=A[0]-B[0],dy=A[1]-B[1],L=Math.hypot(dx,dy),u=[dx/L,dy/L],r=[A[0]-J[0],A[1]-J[1]];
+ return{A,B,J,L,u,cr:r[0]*u[1]-r[1]*u[0]};}
+/* Two-link IK for the gripper contact point (elbow-up). Returns angles or an error text. */
+function ik(x,y){const L=L2+LG,dx=x-S0[0],dy=y-S0[1],d=Math.hypot(dx,dy);
+ if(d>L1+L-.005||d<Math.abs(L1-L)+.02)return{err:'target outside reachable envelope'};
+ const c=(d*d-L1*L1-L*L)/(2*L1*L),t2=-Math.acos(c),t1=Math.atan2(dy,dx)-Math.atan2(L*Math.sin(t2),L1+L*Math.cos(t2)),a=t1/D2R,b=t2/D2R;
+ if(a<C.s.lim[0]||a>C.s.lim[1]||b<C.e.lim[0]||b>C.e.lim[1])return{err:'joint limit (θ1 '+a.toFixed(1)+'°, θ2 '+b.toFixed(1)+'°)'};
+ return{t1:a,t2:b};}
+/* ===== Physics: gravity torque (about each joint, CCW positive), required cylinder force, grip ===== */
+function gravTorque(t1,t2,mp){const p=pose(t1,t2),c1=Math.cos(p.a1),c2=Math.cos(p.a2);
+ return{s:-G*(M1*.125*c1+M2*(L1*c1+.1*c2)+MG*(L1*c1+(L2+.03)*c2)+mp*(L1*c1+(L2+LG)*c2)),
+        e:-G*(M2*.1*c2+MG*(L2+.03)*c2+mp*(L2+LG)*c2)};}
+function metrics(){const t=gravTorque(S.th.s,S.th.e,S.att?S.mass:0),td=gravTorque(S.th.s,S.th.e,S.mass),Pav=Math.min(S.Ps,S.Pr)*1e6,m={};
+ for(const k of['s','e']){const c=C[k],g=cyl(k,S.th.s,S.th.e),Ae=Math.PI*c.bore**2/4,Ar=Math.PI*(c.bore**2-c.rod**2)/4,ok=Math.abs(g.cr)>1e-4;
+  m[k]={g,Ae,Ar,tau:t[k],cr:g.cr,L:g.L,stroke:g.L-c.Lmin,Fh:ok?-t[k]/g.cr:NaN,FhD:ok?-td[k]/g.cr:NaN,Fid:S.Ps*1e6*Ae,Fext:Pav*Ae*P.eff,Fret:Pav*Ar*P.eff};}
+ return m;}
+function grip(){const A=Math.PI*.032**2/4,Fid=S.Pa*1e6*A,Fav=S.air?Fid*P.effA:0,N=Fav*P.MA/2,cap=2*P.mu*N,req=S.mass*G*P.SF;
+ return{Fid,Fav,N,cap,req,margin:req>0?cap/req:99};}
+function dLdth(k){const a=cyl(k,S.th.s,S.th.e),b=k==='s'?cyl(k,S.th.s+.1,S.th.e):cyl(k,S.th.s,S.th.e+.1);return(b.L-a.L)/.1;}
+/* ===== Simulation step ===== */
+function step(dt){
+ if(S.run==='PAUSED')return;dt*=S.speed;S.t+=dt;
+ const mt=metrics(),V={s:0,e:0};
+ if(S.run==='READY'||S.run==='RUNNING')for(const k of['s','e']){V[k]=S.man[k];
+  if(!V[k]&&S.tg[k]!=null){const er=S.tg[k]-S.th[k];if(Math.abs(er)<.25)S.tg[k]=null;else V[k]=Math.sign(er);}}
+ S.V={...V};S.stall={s:false,e:false};S.qAct=0;S.relief=S.pump&&S.Ps>S.Pr;
+ let act=['s','e'].filter(k=>V[k]);
+ if(act.length&&!S.pump){if(S.t-lastW>1.5){warn('Pump OFF: no hydraulic power. Valve is shifted but cylinders stay held by the closed-centre valve.');lastW=S.t;}act=[];}
+ const Pav=Math.min(S.Ps,S.Pr);
+ for(const k of act){const c=C[k],m=mt[k],v=V[k],area=v>0?m.Ae:m.Ar,Fn=v>0?Math.max(m.Fh,0):Math.max(-m.Fh,0),Fa=Pav*1e6*area*P.eff;
+  if(!(Math.abs(m.cr)>=.012)){fault(c.n+' near dead-centre (moment arm '+(m.cr*1000).toFixed(1)+' mm)');break;}
+  if(Fn>Fa){S.stall[k]=true;S.relief=true;warn(c.n+' stalled: needs '+Fn.toFixed(0)+' N, available '+Fa.toFixed(0)+' N (relief valve open)');if(S.auto)fault('Insufficient actuator force at '+c.n.toLowerCase());continue;}
+  const vel=S.Q/60000/act.length/area,dl=dLdth(k);   /* v = Q/A, Q converted L/min to m³/s */
+  if(!(dl>1e-6)){fault(c.n+' cylinder geometry inconsistent (dL/dθ ≤ 0)');break;}
+  let d=v*vel*dt/dl;const er=S.tg[k]!=null?S.tg[k]-S.th[k]:null;if(er!=null&&Math.abs(d)>Math.abs(er))d=er;
+  const nt=S.th[k]+d;
+  if(nt<c.lim[0]||nt>c.lim[1]){S.th[k]=Math.min(c.lim[1],Math.max(c.lim[0],nt));S.man[k]=0;S.tg[k]=null;warn(c.n+': joint limit '+c.lim[v>0?1:0]+'° reached');continue;}
+  const nl=(k==='s'?cyl('s',nt,S.th.e):cyl('e',S.th.s,nt)).L;
+  if(nl<c.Lmin-1e-9||nl>c.Lmax+1e-9){fault(c.n+' cylinder stroke limit (length '+(nl*1000).toFixed(0)+' mm outside '+(c.Lmin*1000).toFixed(0)+'–'+(c.Lmax*1000).toFixed(0)+' mm)');break;}
+  S.th[k]=nt;S.qAct+=vel*area*60000;}
+ const m2=metrics();let mx=0,mov=false;
+ for(const k of['s','e']){const f=m2[k].Fh,a=f>=0?m2[k].Ae:m2[k].Ar;
+  S.pc[k]=S.pump&&isFinite(f)?Math.min(Pav,Math.abs(f)/(a*P.eff)/1e6+.05):0;if(V[k]&&S.pump&&!S.stall[k]){mov=true;mx=Math.max(mx,S.pc[k]);}}
+ S.sup=!S.pump?0:(mov&&!S.stall.s&&!S.stall.e?mx:Pav);   /* closed-centre + pressure-compensated pump: standby/stall = setpoint */
+ gripStep(dt);auto();
+ if(S.t-lastRec>=.25){lastRec=S.t;const g=grip();REC.push({t:+S.t.toFixed(2),th1:S.th.s,th2:S.th.e,Ls:m2.s.L*1000,Le:m2.e.L*1000,Psup:S.sup,Q:S.qAct,Ps:S.pc.s,Pe:S.pc.e,Fs:m2.s.Fh,Fe:m2.e.Fh,Fgrip:g.Fav,payload:S.att?'ATTACHED':'FREE',warning:S.msg.replace(/,/g,';')});if(REC.length>6000)REC.shift();}
+}
+function gripStep(dt){
+ const p=pose(S.th.s,S.th.e),near=!S.att&&Math.hypot(p.tip[0]-S.obj.x,p.tip[1]-S.obj.y)<.025;
+ if(!S.air){if(S.att){S.att=false;warn('Air supply OFF: gripper unpowered, clamping force 0 N, payload released');}}
+ else{const tg=S.close?((near||S.att)?OBJW:0):GAPMAX,r=.1*dt;S.gap+=Math.max(-r,Math.min(r,tg-S.gap));}
+ const g=grip();
+ if(S.air&&S.close&&near&&S.gap<=OBJW+.0005&&!S.gripFail){
+  if(g.margin>=1){S.att=true;note('Object gripped: capacity '+g.cap.toFixed(1)+' N ≥ required '+g.req.toFixed(1)+' N');}
+  else{S.gripFail=true;warn('Grip insufficient: capacity '+g.cap.toFixed(1)+' N < required '+g.req.toFixed(1)+' N (object not lifted)');}}
+ if(S.att&&g.margin<1){S.att=false;S.gripFail=true;warn('Grip margin lost: payload released');}
+ if(!S.close){S.gripFail=false;if(S.att&&S.gap>OBJW+.002){S.att=false;note('Object released');}}
+ if(S.att){S.obj.x=p.tip[0];S.obj.y=p.tip[1];S.obj.vy=0;}
+ else if(S.obj.y>.0201){S.obj.vy+=G*dt;S.obj.y=Math.max(.02,S.obj.y-S.obj.vy*dt);if(S.obj.y<=.02)S.obj.vy=0;}
+}
+/* ===== Automatic pick-and-place ===== */
+const ST=['HOME','APPROACH','LOWER','GRIP','VERIFY GRIP','LIFT','TRANSFER','LOWER OBJECT','RELEASE','RETURN'];
+function goto(x,y){const r=ik(x/1000,y/1000);if(r.err){fault('Invalid pose ('+x+', '+y+' mm): '+r.err);return false;}S.tg.s=r.t1;S.tg.e=r.t2;return true;}
+function enter(n){S.stage=n;S.st0=S.t;note('Stage '+(n+1)+'/10: '+ST[n]);
+ if(n===0||n===9){S.tg.s=HOME.s;S.tg.e=HOME.e;if(n===0)S.close=false;}
+ else if(n===1||n===5)goto(P.pickX,P.liftY);else if(n===2)goto(P.pickX,20);else if(n===3)S.close=true;
+ else if(n===6)goto(P.placeX,P.liftY);else if(n===7)goto(P.placeX,20);else if(n===8)S.close=false;}
+function auto(){if(!S.auto||S.run!=='RUNNING')return;
+ if(!S.pump||!S.air)return fault('Supply lost during automatic cycle');
+ const n=S.stage;let d=false;
+ if([0,1,2,5,6,7,9].includes(n))d=S.tg.s==null&&S.tg.e==null&&(n!==0||S.gap>.0695);
+ else if(n===3){if(S.gap<OBJW-.0005&&!S.att)return fault('No object between the fingers (gripper closed fully)');d=S.gap<=OBJW+.0005&&(S.att||S.gripFail);}
+ else if(n===4){if(!S.att)return fault('Grip verification failed: grip capacity is below the required holding force');d=true;}
+ else if(n===8)d=S.gap>=.0695;
+ if(S.t-S.st0>90)return fault('Stage timeout: '+ST[n]);
+ if(d){if(n===9){S.auto=false;S.stage=-1;note('Cycle complete in '+(S.t-S.t0).toFixed(1)+' s');S.msg='Cycle complete.';}else enter(n+1);}}
+function startAuto(){
+ if(S.run!=='RUNNING'||!S.pump||!S.air){warn('Cannot start cycle: press SYSTEM START (pump and air supply must be ON, no fault)');return false;}
+ for(const [x,y] of [[P.pickX,P.liftY],[P.pickX,20],[P.placeX,P.liftY],[P.placeX,20]]){const r=ik(x/1000,y/1000);if(r.err){warn('Cycle rejected: pose ('+x+', '+y+' mm) – '+r.err);return false;}}
+ S.obj={x:P.pickX/1000,y:.02,vy:0};S.att=false;S.auto=true;S.t0=S.t;S.man={s:0,e:0};note('Automatic cycle started (object placed at pickup position)');enter(0);return true;}
+/* ===== Commands ===== */
+function setTarget(k,v){const c=C[k];
+ if(S.run==='FAULT'){warn('Fault active: press RESET first');return false;}
+ if(!S.pump){warn('Pump OFF: cannot drive '+c.n.toLowerCase()+' to target without hydraulic power');return false;}
+ if(!(v>=c.lim[0]&&v<=c.lim[1])){warn(c.n+' target '+v+'° rejected: allowed range '+c.lim[0]+'° to '+c.lim[1]+'°');return false;}
+ const t={...S.th,[k]:v},p=pose(t.s,t.e);
+ if(p.E[1]<.02||p.end[1]<.01){warn('Target pose rejected: arm would hit the table');return false;}
+ S.tg[k]=v;S.man[k]=0;return true;}
+function hold(k,v){if(S.run==='FAULT'){warn('Fault active: press RESET first');return;}if(!S.pump&&v)warn('Pump OFF: motion command rejected, no hydraulic power');S.man[k]=v;S.tg[k]=null;}
+function powerUp(){if(S.run==='STOPPED')S.run='READY';}
+function reset(){def();note('System reset: arm homed, supplies off');}
+/* ===== Exports ===== */
+function csv(){const h=['t_s','shoulder_deg','elbow_deg','shoulder_len_mm','elbow_len_mm','supply_MPa','flow_Lmin','shoulder_cyl_MPa','elbow_cyl_MPa','shoulder_force_N','elbow_force_N','grip_force_N','payload','warning'];
+ return h.join(',')+'\n'+REC.map(r=>[r.t,r.th1,r.th2,r.Ls,r.Le,r.Psup,r.Q,r.Ps,r.Pe,r.Fs,r.Fe,r.Fgrip,r.payload,r.warning].map(x=>typeof x==='number'?+x.toFixed(4):x).join(',')).join('\n');}
+const json=()=>JSON.stringify({state:{...S,prev:undefined},params:P,cylinders:C,grip:grip(),checks:checks(),log:LOG.slice(-60)},null,1);
+const summary=()=>'HYDRAULIC–PNEUMATIC ROBOTIC ARM SIMULATOR – SUMMARY\nSim time: '+S.t.toFixed(1)+' s   Status: '+S.run+'\n\nCHECKS (pass = inside this simplified model only)\n'+checks().map(c=>c[1]+'  '+c[0]+' – '+c[2]).join('\n')+'\n\nLOG\n'+LOG.join('\n');
+async function dl(name,text,type){try{const d=window.claude&&await claude.use('downloads');if(d){await d.save({filename:name,data:new Blob([text],{type})});return;}}catch(e){if(e&&e.code==='declined')return;}const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);}
+/* ===== Checks ===== */
+function checks(){const m=metrics(),g=grip(),r=[],f=(n,s,d)=>r.push([n,s,d]);
+ for(const k of['s','e']){const c=C[k],x=m[k],need=Math.abs(x.FhD),av=x.FhD>=0?x.Fext:x.Fret,mg=need>0?av/need:99;
+  f(c.n+' actuator force',!isFinite(need)?'FAIL':mg>=1.25?'PASS':mg>=1?'REVIEW':'FAIL',isFinite(need)?'required ≈ '+need.toFixed(0)+' N (with payload), available ≈ '+av.toFixed(0)+' N, margin '+mg.toFixed(2)+'×':'singular geometry');
+  const a=Math.abs(x.cr)*1000;f(c.n+' moment arm',a>=20?'PASS':a>=12?'REVIEW':'FAIL',a.toFixed(1)+' mm perpendicular to line of action');
+  f(c.n+' cylinder stroke',x.L>=c.Lmin-1e-6&&x.L<=c.Lmax+1e-6?'PASS':'FAIL','length '+(x.L*1000).toFixed(0)+' mm, allowed '+(c.Lmin*1000).toFixed(0)+'–'+(c.Lmax*1000).toFixed(0)+' mm');}
+ f('Grip holding force',g.margin>=1?'PASS':g.margin>=.8?'REVIEW':'FAIL','capacity ≈ '+g.cap.toFixed(1)+' N vs required ≈ '+g.req.toFixed(1)+' N (margin '+g.margin.toFixed(2)+'×, SF '+P.SF+')');
+ f('Pump vs relief setting',S.Ps<=S.Pr?'PASS':'REVIEW',S.Ps<=S.Pr?'pump setpoint below relief setting':'pump setpoint above relief: relief valve will open, usable pressure = relief setting');
+ f('Power supplies',S.pump&&S.air?'PASS':'REVIEW','pump '+(S.pump?'ON':'OFF')+', air '+(S.air?'ON':'OFF'));
+ f('Payload status',S.att?'PASS':'REVIEW',S.att?'attached to gripper':'not held');
+ return r;}
+/* ===== SVG circuits ===== */
+const dcvSvg=(k,x)=>'<g data-i="h_dcv'+k+'"><rect class="cmp" x="'+x+'" y="96" width="66" height="30"/>'+[0,1,2].map(i=>'<rect id="c'+k+i+'" class="cell" x="'+(x+22*i)+'" y="96" width="22" height="30"/>').join('')+
+ '<text class="tx" x="'+(x+11)+'" y="114" text-anchor="middle">↑↓</text><text class="tx" x="'+(x+33)+'" y="114" text-anchor="middle">⊤ ⊤</text><text class="tx" x="'+(x+55)+'" y="114" text-anchor="middle">✕</text>'+
+ '<text class="tx" x="'+(x+14)+'" y="93" text-anchor="middle">A</text><text class="tx" x="'+(x+52)+'" y="93" text-anchor="middle">B</text><text class="tx" x="'+(x+22)+'" y="137" text-anchor="middle">P</text><text class="tx" x="'+(x+44)+'" y="137" text-anchor="middle">T</text><text class="tb" x="'+(x+33)+'" y="148" text-anchor="middle">4/3 DCV '+(k==='S'?'shoulder':'elbow')+'</text></g>'+
+ '<path id="l_P'+k+'" class="ln off" d="M'+(x+22)+' 126V150"/><path id="l_T'+k+'" class="ln off" d="M'+(x+44)+' 126V190"/><path id="l_A'+k+'" class="ln off" d="M'+(x+14)+' 96V50"/><path id="l_B'+k+'" class="ln off" d="M'+(x+52)+' 96V50"/>'+
+ '<g data-i="h_cyl'+k+'"><rect class="cmp" x="'+x+'" y="26" width="66" height="24"/><rect id="hd'+k+'" x="'+(x+8)+'" y="28" width="4" height="20" fill="var(--tx)"/><rect id="rd'+k+'" x="'+(x+10)+'" y="36" width="70" height="6" fill="var(--mu)"/><text class="tb" x="'+(x+33)+'" y="20" text-anchor="middle">'+(k==='S'?'Shoulder':'Elbow')+' cylinder</text></g><text id="dr'+k+'" class="tb" x="'+(x+33)+'" y="72" text-anchor="middle"></text>';
+function buildSvg(){
+ $('hyd').innerHTML='<g data-i="h_tank"><rect class="cmp" x="14" y="200" width="62" height="38"/><text class="tb" x="45" y="222" text-anchor="middle">RESERVOIR</text></g>'+
+ '<path id="l_in" class="ln off" d="M62 143V200"/><path id="l_sup" class="ln off" d="M75 130H100V150H284"/><path id="l_ret" class="ln off" d="M302 190H40V200"/>'+
+ '<g data-i="h_motor"><circle class="cmp" cx="24" cy="130" r="13"/><text class="tb" x="24" y="134" text-anchor="middle">M</text></g><path class="ln off" d="M37 130H49"/>'+
+ '<g data-i="h_pump"><circle class="cmp" cx="62" cy="130" r="13"/><path d="M56 136L62 124L68 136Z" fill="var(--mu)"/></g><text class="tx" x="62" y="115" text-anchor="middle">PUMP</text>'+
+ '<g data-i="h_relief"><rect id="rl" class="cmp" x="94" y="162" width="12" height="16"/></g><path class="ln off" d="M100 150V162M100 178V190"/><text class="tx" x="112" y="174">RELIEF</text>'+
+ '<g data-i="h_gauge"><circle class="cmp" cx="118" cy="134" r="8"/></g><path class="ln off" d="M118 142V150"/><text id="h_gp" class="tb" x="118" y="122" text-anchor="middle"></text>'+dcvSvg('S',150)+dcvSvg('E',250)+
+ '<text class="tx" x="330" y="154">P rail (supply)</text><text class="tx" x="330" y="194">T rail (return)</text>';
+ $('pn').innerHTML='<g data-i="p_air"><circle class="cmp" cx="30" cy="60" r="18"/><text class="tb" x="30" y="64" text-anchor="middle">AIR</text></g>'+
+ '<path id="p_l1" class="ln off" d="M48 60H70"/><g data-i="p_frl"><rect class="cmp" x="70" y="46" width="56" height="28"/><text class="tb" x="98" y="64" text-anchor="middle">FILTER/REG</text></g>'+
+ '<g data-i="p_gauge"><circle class="cmp" cx="150" cy="40" r="9"/></g><text id="p_gp" class="tb" x="150" y="24" text-anchor="middle"></text><path class="ln off" d="M98 46V40H141"/>'+
+ '<path id="p_l2" class="ln off" d="M126 60H140V175H204V144"/>'+
+ '<g data-i="p_v"><rect class="cmp" x="160" y="110" width="88" height="34"/><rect id="pc0" class="cell" x="160" y="110" width="44" height="34"/><rect id="pc1" class="cell" x="204" y="110" width="44" height="34"/><text class="tx" x="182" y="130" text-anchor="middle">CLOSE</text><text class="tx" x="226" y="130" text-anchor="middle">OPEN</text><text class="tb" x="204" y="158" text-anchor="middle">5/2 valve</text></g>'+
+ '<path id="p_A" class="ln off" d="M178 110V90H262V70"/><path id="p_B" class="ln off" d="M230 110V96H338V70"/><path id="p_R1" class="ln off" d="M180 144V164"/><path id="p_R2" class="ln off" d="M228 144V164"/>'+
+ '<text class="tx" x="168" y="176">R1</text><text class="tx" x="232" y="176">R2</text><text class="tx" x="184" y="106">A</text><text class="tx" x="233" y="106">B</text><text class="tx" x="196" y="140">P</text>'+
+ '<g data-i="p_cyl"><rect class="cmp" x="250" y="40" width="100" height="30"/><rect id="phd" x="256" y="42" width="4" height="26" fill="var(--tx)"/><rect id="prd" x="258" y="52" width="110" height="6" fill="var(--mu)"/><text class="tb" x="300" y="34" text-anchor="middle">Ø32 gripper cylinder</text></g>'+
+ '<g data-i="p_fing"><rect id="pf1" class="cmp" x="368" y="30" width="30" height="8"/><rect id="pf2" class="cmp" x="368" y="72" width="30" height="8"/></g><text class="tx" x="372" y="95">fingers</text><text id="pdr" class="tb" x="300" y="84" text-anchor="middle"></text>';
+}
+const sc=(id,c)=>{const e=$(id);if(e)e.setAttribute('class','ln '+c);};
+function drawCircuits(){
+ const on=S.pump,run=S.run!=='PAUSED';
+ sc('l_in',on?'lp on rev':'off');sc('l_sup',on?'hp on':'off');sc('l_ret',on?'lp on':'off');
+ $('rl').setAttribute('class',S.relief?'cmp lit':'cmp');
+ for(const [K,k,x] of[['S','s',150],['E','e',250]]){const v=S.V[k],mv=on&&v&&!S.stall[k]?' on':'',h=on&&v?'hp'+mv:'off',l=on&&v?'lp'+mv:'off',rv=mv?' rev':'',c=C[k],m=cyl(k,S.th.s,S.th.e),fr=(m.L-c.Lmin)/(c.Lmax-c.Lmin),hx=x+8+Math.max(0,Math.min(1,fr))*48;
+  sc('l_P'+K,on&&v?'hp'+mv+rv:'off');sc('l_T'+K,l);sc('l_A'+K,v>0?h:v<0?l+rv:'off');sc('l_B'+K,v<0?h:v>0?l+rv:'off');
+  $('dr'+K).textContent=!v?'■ held (neutral)':!on?'valve shifted, no pump power':S.stall[k]?'stalled':v>0?'extending ▶':'◀ retracting';
+  [0,1,2].forEach(i=>$('c'+K+i).setAttribute('class','cell'+((i===0&&v>0)||(i===1&&!v)||(i===2&&v<0)?' sel':'')));
+  $('hd'+K).setAttribute('x',hx);$('rd'+K).setAttribute('x',hx);$('rd'+K).setAttribute('width',x+80-hx);}
+ $('h_gp').textContent=S.sup.toFixed(2)+' MPa';
+ const a=S.air,cl=S.close,fr=(GAPMAX-S.gap)/GAPMAX,hx=256+fr*70,mv=a&&Math.abs((cl?(S.att?OBJW:0):GAPMAX)-S.gap)>.0008?' on':'';
+ sc('p_l1',a?'air on':'off');sc('p_l2',a?'air on':'off');sc('p_A',a?(cl?'air'+mv:'ex'+mv+(mv?' rev':'')):'off');sc('p_B',a?(cl?'ex'+mv+(mv?' rev':''):'air'+mv):'off');sc('p_R1',a&&!cl?'ex'+mv:'off');sc('p_R2',a&&cl?'ex'+mv:'off');
+ $('pdr').textContent=!a?'unpowered':mv?(cl?'closing ▶':'◀ opening'):(cl?'■ closed':'■ open');
+ $('pc0').setAttribute('class','cell'+(cl?' sel':''));$('pc1').setAttribute('class','cell'+(!cl?' sel':''));
+ $('phd').setAttribute('x',hx);$('prd').setAttribute('x',hx+2);$('prd').setAttribute('width',110+(256-hx)+70-2);
+ const off=S.gap/GAPMAX*14;$('pf1').setAttribute('y',44-off-14);$('pf2').setAttribute('y',58+off+10);
+ $('p_gp').textContent=(a?S.Pa:0).toFixed(2)+' MPa';
+ document.querySelectorAll('[data-i]').forEach(e=>e.classList.toggle('sel',e.dataset.i===sel));
+}
+function info(id){const m=metrics(),g=grip(),f=(x,d=0)=>isFinite(x)?x.toFixed(d):'n/a';
+ const vn=v=>v>0?'EXTEND (P→A, B→T)':v<0?'RETRACT (P→B, A→T)':'NEUTRAL: illustrative closed centre, P, T, A and B all blocked, so the cylinder is held (no leakage modelled)';
+ const cy=(k)=>{const x=m[k],c=C[k];return '<b>'+c.n+' double-acting cylinder</b> – bore '+c.bore*1000+' mm, rod '+c.rod*1000+' mm. Length '+f(x.L*1000)+' mm (stroke '+f(x.stroke*1000)+' of '+f((c.Lmax-c.Lmin)*1000)+' mm). Ideal extension force at pump setpoint ≈ '+f(x.Fid)+' N; available ≈ '+f(x.Fext)+' N extend / '+f(x.Fret)+' N retract (efficiency '+P.eff+'). Needed to hold now ≈ '+f(Math.abs(x.Fh))+' N, moment arm '+f(x.cr*1000,1)+' mm. Valve: '+vn(S.V[k])+'.';};
+ const T={h_motor:'<b>Electric motor</b> – drives the pump. State: '+(S.pump?'RUNNING':'OFF')+'.',
+ h_pump:'<b>Hydraulic pump</b> – converts motor power to flow. State '+(S.pump?'ON':'OFF')+', flow setpoint '+S.Q.toFixed(2)+' L/min, pressure setpoint '+S.Ps.toFixed(2)+' MPa. Input: reservoir. Output: P rail.',
+ h_tank:'<b>Reservoir</b> – supplies the pump inlet and receives return flow from T ports and the relief valve.',
+ h_relief:'<b>Pressure-relief valve</b> – setting '+S.Pr.toFixed(2)+' MPa. Indicator: '+(S.relief?'OPEN (flow bypassing to tank)':'closed')+'. Opens when the pump setpoint exceeds the setting or a cylinder stalls. Simplified: no cracking-pressure curve.',
+ h_gauge:'<b>Pressure gauge</b> – supply pressure '+S.sup.toFixed(2)+' MPa (quasi-static estimate).',
+ h_dcvS:'<b>Shoulder 4/3 DCV</b> – spool: '+vn(S.V.s),h_dcvE:'<b>Elbow 4/3 DCV</b> – spool: '+vn(S.V.e),h_cylS:cy('s'),h_cylE:cy('e'),
+ p_air:'<b>Compressed-air source</b> – '+(S.air?'ON':'OFF')+'. With air OFF the gripper has no powered grip: clamping force is 0 N and any held object is released.',
+ p_frl:'<b>Filter/regulator</b> – sets gripper pressure to '+S.Pa.toFixed(2)+' MPa.',p_gauge:'<b>Air pressure gauge</b> – '+(S.air?S.Pa:0).toFixed(2)+' MPa.',
+ p_v:'<b>5/2 valve</b> – '+(S.close?'CLOSE: P→A (cap side), B→R2':'OPEN: P→B (rod side), A→R1')+'. Exhausts R1/R2 shown dimmed.',
+ p_cyl:'<b>Ø32 mm pneumatic cylinder</b> – ideal force ≈ '+f(g.Fid)+' N, available ≈ '+f(g.Fav)+' N (efficiency '+P.effA+'). Finger contact ≈ '+f(g.N,1)+' N per pad (assumed linkage advantage '+P.MA+'), friction capacity ≈ '+f(g.cap,1)+' N with μ '+P.mu+' on 2 pads. Required with safety factor ≈ '+f(g.req,1)+' N.',
+ p_fing:'<b>Gripper fingers</b> – gap '+f(S.gap*1000)+' mm. Payload: '+(S.att?'ATTACHED':'not held')+'.'};
+ return T[id]||'Click a component.';}
+/* ===== UI ===== */
+const SL=[['th1','Shoulder target',-10,78,1,'°'],['th2','Elbow target',-140,0,1,'°'],['Ps','Pump pressure',.5,7,.05,' MPa'],['Q','Pump flow',.2,3,.05,' L/min'],['Pr','Relief setting',.5,7,.05,' MPa'],['Pa','Air pressure',.1,.8,.01,' MPa'],['mass','Payload mass',0,3,.05,' kg']];
+function buildCtl(){
+ $('sls').innerHTML=SL.map(s=>'<div class="sl"><label for="s_'+s[0]+'">'+s[1]+'</label><input id="s_'+s[0]+'" type="range" min="'+s[2]+'" max="'+s[3]+'" step="'+s[4]+'"><output id="o_'+s[0]+'"></output></div>').join('');
+ SL.forEach(s=>$('s_'+s[0]).addEventListener('input',e=>{const v=+e.target.value;
+  if(s[0]==='th1'){if(!setTarget('s',v))syncCtl(true);}else if(s[0]==='th2'){if(!setTarget('e',v))syncCtl(true);}else S[s[0]]=v;}));
+ for(const k of['eff','effA','MA','mu','SF','pickX','placeX','liftY'])$(k).addEventListener('change',e=>{const v=parseFloat(e.target.value);if(isFinite(v))P[k]=v;else e.target.value=P[k];});
+}
+function syncCtl(force){
+ for(const s of SL){const el=$('s_'+s[0]);let v=s[0]==='th1'?S.th.s:s[0]==='th2'?S.th.e:S[s[0]];
+  if(force||document.activeElement!==el)el.value=v;$('o_'+s[0]).textContent=(+v).toFixed(s[4]<.1?2:1)+s[5];}
+ for(const k of['eff','effA','MA','mu','SF','pickX','placeX','liftY'])if(document.activeElement!==$(k))$(k).value=P[k];
+ if(document.activeElement!==$('vS'))$('vS').value=S.man.s;if(document.activeElement!==$('vE'))$('vE').value=S.man.e;
+}
+function render(){
+ const m=metrics(),g=grip(),st=$('st');st.textContent=S.run;st.className='pill '+S.run;
+ const act=['s','e'].filter(k=>S.V[k]&&S.pump).map(k=>C[k].n+(S.V[k]>0?' extend':' retract')).join(' + ')||'none';
+ $('ops').innerHTML=[['Mode',S.auto?'AUTOMATIC':(S.tg.s!=null||S.tg.e!=null?'TARGET SEEK':'MANUAL')],['Active actuator',act],['Pump',S.pump?'ON':'OFF'],['Air supply',S.air?'ON':'OFF'],
+  ['Gripper',S.air?(S.close?'CLOSE commanded':'OPEN commanded')+', gap '+(S.gap*1000).toFixed(0)+' mm':'UNPOWERED (no clamp force)'],['Pressure / flow',S.sup.toFixed(2)+' MPa / '+S.qAct.toFixed(2)+' L/min'],
+  ['Motion stage',S.auto&&S.stage>=0?(S.stage+1)+'/10 '+ST[S.stage]:'–'],['Elapsed',S.auto?(S.t-S.t0).toFixed(1)+' s':'–'],['Sim time',S.t.toFixed(1)+' s']].map(r=>'<span class="mu">'+r[0]+'</span><b>'+r[1]+'</b>').join('');
+ $('prog').style.width=(S.auto&&S.stage>=0?S.stage*10:(S.run==='READY'||S.run==='RUNNING')&&!S.auto&&S.stage===-1&&REC.length&&S.msg==='Cycle complete.'?100:0)+'%';
+ $('msg').textContent=S.msg;$('msg').style.borderColor=S.run==='FAULT'?'var(--bad)':'var(--rev)';
+ const sh=m.s,el=m.e,av=x=>x.Fh>=0?x.Fext:x.Fret,n=(v,d=1)=>isFinite(v)?v.toFixed(d):'n/a';
+ const T=[['≈ Supply pressure',S.sup.toFixed(2),'MPa'],['≈ Shoulder cyl. pressure',S.pc.s.toFixed(2),'MPa'],['≈ Elbow cyl. pressure',S.pc.e.toFixed(2),'MPa'],['Flow to actuators',S.qAct.toFixed(2),'L/min'],['Pneumatic pressure',(S.air?S.Pa:0).toFixed(2),'MPa'],
+  ['Shoulder angle',S.th.s.toFixed(1),'°'],['Elbow angle',S.th.e.toFixed(1),'°'],['Shoulder stroke',n(sh.stroke*1000),'mm'],['Elbow stroke',n(el.stroke*1000),'mm'],
+  ['≈ Shoulder torque (hold)',n(Math.abs(sh.tau),2),'N·m'],['≈ Elbow torque (hold)',n(Math.abs(el.tau),2),'N·m'],['≈ Shoulder force req.',n(Math.abs(sh.Fh),0),'N'],['≈ Shoulder force avail.',n(av(sh),0),'N'],
+  ['≈ Elbow force req.',n(Math.abs(el.Fh),0),'N'],['≈ Elbow force avail.',n(av(el),0),'N'],['≈ Gripper force (avail.)',n(g.Fav,0),'N'],['≈ Grip capacity / req.',n(g.cap,0)+' / '+n(g.req,0),'N'],['Payload',S.mass.toFixed(2),'kg '+(S.att?'held':'free')]];
+ $('tiles').innerHTML=T.map(t=>'<div class="t"><b>'+t[1]+'</b><i>'+t[2]+'</i><span>'+t[0]+'</span></div>').join('');
+ $('chk').innerHTML=checks().map(c=>'<tr><td>'+c[0]+'</td><td class="'+c[1]+'">'+c[1]+'</td><td class="mu">'+c[2]+'</td></tr>').join('');
+ const lg=$('log');lg.textContent=LOG.slice(-80).join('\n');lg.scrollTop=lg.scrollHeight;
+ $('bPump').className=S.pump?'on':'';$('bPump').textContent='PUMP '+(S.pump?'ON':'OFF');$('bAir').className=S.air?'on':'';$('bAir').textContent='AIR '+(S.air?'ON':'OFF');
+ $('bPause').textContent=S.run==='PAUSED'?'RESUME':'PAUSE';$('bAuto').className=S.auto?'on':'';
+ $('det').innerHTML=sel?info(sel):'Click a component in either circuit.';
+ syncCtl();drawCircuits();
+ plot($('g1'),[['Supply MPa',REC.map(r=>r.Psup),'#ff7a45'],['Shoulder cyl.',REC.map(r=>r.Ps),'#4aa3ff'],['Elbow cyl.',REC.map(r=>r.Pe),'#3ecf6e']],0,Math.max(3,S.Pr+.5),'Pressure (MPa)');
+ plot($('g2'),[['Shoulder °',REC.map(r=>r.th1),'#ffd24a'],['Elbow °',REC.map(r=>r.th2),'#c792ea'],['Shoulder stroke mm',REC.map(r=>r.Ls-C.s.Lmin*1000),'#4aa3ff'],['Elbow stroke mm',REC.map(r=>r.Le-C.e.Lmin*1000),'#3ecf6e']],-140,100,'Joint angle (°) / stroke (mm)');
+}
+function plot(cv,ser,lo,hi,title){const x=cv.getContext&&cv.getContext('2d');if(!x)return;const w=cv.width,h=cv.height,mu=getComputedStyle(document.documentElement).getPropertyValue('--mu')||'#888';
+ x.clearRect(0,0,w,h);x.fillStyle=mu;x.font='11px sans-serif';x.fillText(title,6,12);
+ ser.forEach((s,i)=>{const d=s[1].slice(-240);x.strokeStyle=s[2];x.lineWidth=1.5;x.beginPath();d.forEach((v,j)=>{const px=j/239*w,py=h-6-(v-lo)/(hi-lo)*(h-22);j?x.lineTo(px,py):x.moveTo(px,py);});x.stroke();x.fillStyle=s[2];x.fillText(s[0],w-4-90*(ser.length-i)+0,12);});}
+/* ===== Self-tests (executed only when you press the button) ===== */
+function runTests(){const out=[],run=(sec)=>{for(let i=0;i<sec/.02;i++)step(.02);},pw=()=>{S.pump=true;S.air=true;S.run='RUNNING';};
+ const T=(n,f)=>{let r;try{r=f();}catch(e){r='exception: '+e.message;}out.push([n,r===true,r===true?'':String(r)]);};
+ T('1 Initial state',()=>{def();return(S.th.s===70&&S.th.e===-130&&!S.pump&&S.gap>.069&&S.run==='READY')||'unexpected initial state';});
+ T('2 Pump OFF blocks motion',()=>{def();S.man.s=1;run(1);return S.th.s===70||'arm moved without pump';});
+ T('3 Pump ON pressurises',()=>{def();pw();run(.2);return S.sup>1.9||'supply '+S.sup.toFixed(2);});
+ T('4 Shoulder extension',()=>{def();pw();S.th.s=40;S.man.s=1;run(1);return S.th.s>41||'angle '+S.th.s.toFixed(2);});
+ T('5 Shoulder retraction',()=>{def();pw();S.th.s=40;S.man.s=-1;run(1);return S.th.s<39||'angle '+S.th.s.toFixed(2);});
+ T('6 Elbow extension',()=>{def();pw();S.th.e=-100;S.man.e=1;run(1);return S.th.e>-99||'angle '+S.th.e.toFixed(2);});
+ T('7 Elbow retraction',()=>{def();pw();S.th.e=-100;S.man.e=-1;run(1);return S.th.e<-101||'angle '+S.th.e.toFixed(2);});
+ T('8 Gripper opening',()=>{def();pw();S.gap=0;S.close=false;run(1.5);return S.gap>.069||'gap '+S.gap;});
+ T('9 Gripper closing',()=>{def();pw();S.close=true;run(1.5);return S.gap<.001||'gap '+S.gap;});
+ T('10 Automatic pick-and-place',()=>{def();pw();if(!startAuto())return'cycle refused: '+S.msg;run(400);return(!S.auto&&S.run==='RUNNING'&&!S.att&&Math.abs(S.obj.x*1000-P.placeX)<8&&Math.abs(S.obj.y-.02)<.002)||'run='+S.run+' stage='+S.stage+' fault='+S.fault+' obj x='+(S.obj.x*1000).toFixed(0);});
+ T('11 Insufficient grip force',()=>{def();pw();S.mass=3;S.Pa=.1;startAuto();run(400);return(S.run==='FAULT'&&!S.att&&/grip/i.test(S.fault))||'run='+S.run+' fault='+S.fault;});
+ T('12 Cylinder stroke limit',()=>{def();pw();C.s.Lmax=.15;S.man.s=1;run(1);const r=S.run==='FAULT'&&/stroke/i.test(S.fault);Object.assign(C.s,C0.s);return r||'run='+S.run+' fault='+S.fault;});
+ T('13 Invalid target pose',()=>{def();pw();return(!!ik(.9,.02).err&&setTarget('s',85)===false&&ik(.3,.02).err===undefined)||'pose validation did not reject';});
+ T('14 Reset after fault',()=>{def();pw();fault('test fault');reset();return(S.run==='READY'&&S.fault===''&&S.th.s===70)||'state not cleared';});
+ T('15 CSV and JSON export',()=>{def();pw();S.man.s=-1;run(2);const c=csv().split('\n'),j=JSON.parse(json());return(c.length>2&&c[0].startsWith('t_s')&&j.state&&j.checks.length>5)||'export content invalid';});
+ reset();tests=out;renderTests();}
+function renderTests(){if(!tests)return;$('tests').innerHTML='<tr><td colspan="3" class="mu">Executed in this browser session at sim reset, '+tests.filter(t=>t[1]).length+'/'+tests.length+' passed.</td></tr>'+tests.map(t=>'<tr><td>'+t[0]+'</td><td class="'+(t[1]?'PASS':'FAIL')+'">'+(t[1]?'PASS':'FAIL')+'</td><td class="mu">'+t[2]+'</td></tr>').join('');}
+/* ===== 3D view with 2D fallback ===== */
+let V3=null;
+function init3d(){const v=$('view');let fb='';
+ try{if(!window.THREE)throw new Error('Three.js could not be loaded from the CDN (internet connection needed).');
+  const W=THREE,rd=new W.WebGLRenderer({antialias:true});v.appendChild(rd.domElement);rd.setPixelRatio(Math.min(devicePixelRatio||1,2));
+  const sc=new W.Scene();sc.background=new W.Color(0x0b1016);const cam=new W.PerspectiveCamera(40,1.6,.01,10);
+  sc.add(new W.HemisphereLight(0xffffff,0x334455,.9));const dl=new W.DirectionalLight(0xffffff,.8);dl.position.set(.5,1,.8);sc.add(dl);
+  const mk=(geo,col,sx,sy,sz,o)=>{const m=new W.Mesh(geo,new W.MeshStandardMaterial(Object.assign({color:col,metalness:.35,roughness:.55},o||{})));m.scale.set(sx,sy,sz);sc.add(m);return m;};
+  const bx=new W.BoxGeometry(1,1,1),cy=new W.CylinderGeometry(1,1,1,20),sp=new W.SphereGeometry(1,12,8),pin=new W.CylinderGeometry(1,1,1,16).rotateX(Math.PI/2);
+  const grid=new W.GridHelper(1.2,24,0x2a3a4a,0x1a2634);sc.add(grid);
+  const base=mk(bx,0x56606b,.2,.01,.16);base.position.set(0,.005,0);const col=mk(cy,0x7a8794,.035,.11,.035);col.position.set(0,.065,0);
+  const M={l1:mk(bx,0xd9a21b,.03,1,.03),l2:mk(bx,0xd9a21b,.026,1,.026),palm:mk(bx,0x8a96a3,.07,1,.026),f1:mk(bx,0xc8d0d8,.008,1,.022),f2:mk(bx,0xc8d0d8,.008,1,.022),
+   obj:mk(bx,0x2fb36d,OBJW,OBJW,OBJW),js:mk(pin,0x222a33,.016,.09,.016),je:mk(pin,0x222a33,.014,.09,.014)};
+  for(const k of['s','e']){M['b'+k]=mk(cy,0x4aa3ff,.0125,1,.0125,{transparent:true,opacity:.35});M['r'+k]=mk(cy,0xdde3e9,.005,1,.005,{metalness:.8,roughness:.25});M['pa'+k]=mk(sp,0xff7a45,.008,.008,.008);M['pb'+k]=mk(sp,0xff7a45,.008,.008,.008);}
+  const names=[['Shoulder pivot'],['Elbow pivot'],['Shoulder cylinder'],['Elbow cylinder'],['Pneumatic gripper']];
+  const lb=names.map(n=>{const d=document.createElement('div');d.className='lb';d.textContent=n[0];v.appendChild(d);return d;});
+  V3={W,rd,sc,cam,M,lb,az:.8,el:.35,dist:.95,tgt:new W.Vector3(.18,.1,0)};
+  let drag=false,px=0,py=0;v.addEventListener('pointerdown',e=>{drag=true;px=e.clientX;py=e.clientY;});addEventListener('pointerup',()=>drag=false);
+  v.addEventListener('pointermove',e=>{if(!drag)return;V3.az-=(e.clientX-px)*.008;V3.el=Math.max(.05,Math.min(1.4,V3.el+(e.clientY-py)*.006));px=e.clientX;py=e.clientY;});
+  v.addEventListener('wheel',e=>{e.preventDefault();V3.dist=Math.max(.4,Math.min(2,V3.dist*(1+Math.sign(e.deltaY)*.08)));},{passive:false});
+  new ResizeObserver(()=>{const w=v.clientWidth,h=v.clientHeight;if(w&&h){rd.setSize(w,h,false);cam.aspect=w/h;cam.updateProjectionMatrix();}}).observe(v);
+  return;}catch(e){fb=e.message;}
+ v.innerHTML='<canvas id="c2" width="720" height="340"></canvas><div class="lb" style="left:6px;top:6px;white-space:normal">3D view unavailable: '+fb+' Showing 2D side view instead; all simulation features still work.</div>';}
+function seg(m,a,b,z){const dx=b[0]-a[0],dy=b[1]-a[1];m.position.set((a[0]+b[0])/2,(a[1]+b[1])/2,z);m.rotation.z=Math.atan2(dy,dx)-Math.PI/2;m.scale.y=Math.max(Math.hypot(dx,dy),1e-4);}
+function draw3d(){if(!V3){draw2d();return;}
+ const {W,rd,sc,cam,M,lb}=V3,p=pose(S.th.s,S.th.e),cs=cyl('s',S.th.s,S.th.e),ce=cyl('e',S.th.s,S.th.e);
+ seg(M.l1,S0,p.E,0);seg(M.l2,p.E,p.end,0);M.js.position.set(S0[0],S0[1],0);M.je.position.set(p.E[0],p.E[1],0);
+ const n=[-p.e[1],p.e[0]],h=S.gap/2+.004,c=L2+LG,at=(s,o)=>[p.E[0]+p.e[0]*s+n[0]*o,p.E[1]+p.e[1]*s+n[1]*o];
+ seg(M.palm,at(L2,0),at(L2+.03,0),0);seg(M.f1,at(c-.03,h),at(c+.03,h),0);seg(M.f2,at(c-.03,-h),at(c+.03,-h),0);
+ M.obj.position.set(S.obj.x,S.obj.y,0);M.obj.rotation.z=(S.att||(S.close&&S.gap<GAPMAX-.005&&Math.hypot(p.tip[0]-S.obj.x,p.tip[1]-S.obj.y)<.03))?p.a2:0;
+ for(const [k,g,z] of[['s',cs,.035],['e',ce,-.035]]){const bl=C[k].Lmin-.005,e1=[g.B[0]+g.u[0]*bl,g.B[1]+g.u[1]*bl],r0=[g.B[0]+g.u[0]*bl*.6,g.B[1]+g.u[1]*bl*.6];
+  seg(M['b'+k],g.B,e1,z);seg(M['r'+k],r0,g.A,z);M['pa'+k].position.set(g.B[0],g.B[1],z);M['pb'+k].position.set(g.A[0],g.A[1],z);}
+ const q=V3;cam.position.set(q.tgt.x+q.dist*Math.cos(q.el)*Math.sin(q.az),q.tgt.y+q.dist*Math.sin(q.el),q.dist*Math.cos(q.el)*Math.cos(q.az));cam.lookAt(q.tgt);
+ rd.render(sc,cam);
+ const w=$('view').clientWidth,hh=$('view').clientHeight,pts=[[S0[0],S0[1],.04],[p.E[0],p.E[1],.04],[(cs.A[0]+cs.B[0])/2,(cs.A[1]+cs.B[1])/2,.05],[(ce.A[0]+ce.B[0])/2,(ce.A[1]+ce.B[1])/2,-.05],[p.tip[0],p.tip[1],.03]];
+ pts.forEach((t,i)=>{const v=new W.Vector3(t[0],t[1],t[2]).project(cam);lb[i].style.left=((v.x*.5+.5)*w+6)+'px';lb[i].style.top=((-v.y*.5+.5)*hh-6)+'px';});}
+function draw2d(){const cv=$('c2'),x=cv&&cv.getContext&&cv.getContext('2d');if(!x)return;const k=1100,H=cv.height,pt=a=>[(a[0]+.22)*k,H-30-a[1]*k],p=pose(S.th.s,S.th.e),cs=cyl('s',S.th.s,S.th.e),ce=cyl('e',S.th.s,S.th.e);
+ x.clearRect(0,0,cv.width,H);const ln=(a,b,c,wd)=>{const A=pt(a),B=pt(b);x.strokeStyle=c;x.lineWidth=wd;x.beginPath();x.moveTo(A[0],A[1]);x.lineTo(B[0],B[1]);x.stroke();};
+ ln([-.1,0],[.1,0],'#56606b',10);ln(S0,[S0[0],0],'#7a8794',14);ln(S0,p.E,'#d9a21b',12);ln(p.E,p.end,'#d9a21b',10);
+ for(const g of[cs,ce]){ln(g.B,g.A,'#4aa3ff',9);ln([(g.B[0]*2+g.A[0])/3,(g.B[1]*2+g.A[1])/3],g.A,'#dde3e9',4);}
+ const n=[-p.e[1],p.e[0]],h=S.gap/2+.004,at=(s,o)=>[p.E[0]+p.e[0]*s+n[0]*o,p.E[1]+p.e[1]*s+n[1]*o];
+ ln(at(.2,h),at(.2,-h),'#8a96a3',8);ln(at(.23,h),at(.29,h),'#c8d0d8',5);ln(at(.23,-h),at(.29,-h),'#c8d0d8',5);
+ const o=pt([S.obj.x,S.obj.y]);x.fillStyle='#2fb36d';x.fillRect(o[0]-22,o[1]-22,44,44);}
+/* ===== Wiring ===== */
+function on(id,fn){$(id).addEventListener('click',fn);}
+function wire(){
+ on('bStart',()=>{if(S.run==='FAULT'){warn('Fault active: press RESET first');return;}S.run='RUNNING';S.pump=true;S.air=true;S.msg='System running. Pump and air supply ON.';note('SYSTEM START');});
+ on('bPause',()=>{if(S.run==='PAUSED'){S.run=S.prev;note('Resumed');}else if(S.run==='RUNNING'||S.run==='READY'){S.prev=S.run;S.run='PAUSED';note('Paused');}});
+ on('bStop',()=>{S.run='STOPPED';S.pump=false;S.air=false;S.auto=false;S.stage=-1;S.man={s:0,e:0};S.tg={s:null,e:null};S.msg='STOPPED: pump and air OFF. Cylinders held by closed-centre valve; gripper unpowered.';note('STOP');});
+ on('bReset',reset);
+ on('bFs',()=>{try{document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen();}catch(e){warn('Fullscreen unavailable in this embed');}});
+ $('spd').addEventListener('change',e=>S.speed=+e.target.value);
+ on('bPump',()=>{if(S.run==='FAULT'){warn('Fault active: press RESET first');return;}S.pump=!S.pump;powerUp();note('Pump '+(S.pump?'ON':'OFF'));});
+ on('bAir',()=>{if(S.run==='FAULT'){warn('Fault active: press RESET first');return;}S.air=!S.air;powerUp();note('Air supply '+(S.air?'ON':'OFF'));});
+ on('bHome',()=>{if(setTarget('s',HOME.s)&&setTarget('e',HOME.e)){S.close=false;S.auto=false;note('HOME commanded');}});
+ on('bAuto',()=>{if(S.auto){S.auto=false;S.tg={s:null,e:null};note('Cycle cancelled');}else startAuto();});
+ document.querySelectorAll('[data-h]').forEach(b=>{const [k,v]=b.dataset.h.split(',');b.addEventListener('pointerdown',e=>{e.preventDefault();hold(k,+v);});['pointerup','pointerleave','pointercancel'].forEach(ev=>b.addEventListener(ev,()=>{if(S.man[k]===+v)S.man[k]=0;}));});
+ $('vS').addEventListener('change',e=>hold('s',+e.target.value));$('vE').addEventListener('change',e=>hold('e',+e.target.value));
+ on('bGo',()=>{S.close=false;if(!S.air)warn('Air supply OFF: gripper is unpowered, OPEN command has no effect');});
+ on('bGc',()=>{S.close=true;if(!S.air)warn('Air supply OFF: gripper is unpowered, no clamping force available');});
+ on('bPick',()=>{const p=pose(S.th.s,S.th.e),d=Math.hypot(p.tip[0]-S.obj.x,p.tip[1]-S.obj.y)*1000;if(S.att){warn('Object already held');return;}
+  if(d>25){warn('Pick rejected: gripper is '+d.toFixed(0)+' mm from the object (must be within 25 mm)');return;}S.close=true;if(!S.air)warn('Air supply OFF: cannot grip');});
+ on('bRel',()=>{S.close=false;if(S.att&&!S.air)warn('Air OFF: object already released');});
+ on('bClr',()=>{LOG=[];});on('bCsv',()=>dl('arm_measurements.csv',csv(),'text/csv'));on('bJson',()=>dl('arm_state.json',json(),'application/json'));
+ on('bTxt',()=>dl('arm_summary.txt',summary(),'text/plain'));on('bPrint',()=>window.print());on('bTest',runTests);
+ for(const id of['hyd','pn'])$(id).addEventListener('click',e=>{const c=(e.target.id||'').match(/^c([SE])([012])$/);
+  if(c){const k=c[1].toLowerCase(),v=[1,0,-1][+c[2]];hold(k,v);note(C[k].n+' valve shifted to '+(v>0?'EXTEND (P→A)':v<0?'RETRACT (P→B)':'NEUTRAL')+' from the circuit');}
+  else if(e.target.id==='pc0'||e.target.id==='pc1'){S.close=e.target.id==='pc0';note('5/2 valve shifted to '+(S.close?'CLOSE (P→A)':'OPEN (P→B)')+' from the circuit');if(!S.air)warn('Air supply OFF: valve shifted but gripper is unpowered');}
+  const t=e.target.closest('[data-i]');if(t){sel=t.dataset.i;}});
+}
+function boot(){try{def();buildSvg();buildCtl();wire();init3d();}catch(e){document.body.insertAdjacentHTML('afterbegin','<p style="color:#f66;padding:10px">Startup error: '+e.message+'</p>');return;}
+ let last=performance.now(),acc=0;
+ (function loop(t){const dt=Math.min(.05,(t-last)/1000);last=t;try{step(dt/2);step(dt/2);draw3d();acc+=dt;if(acc>.12){acc=0;render();}}catch(e){fault('Runtime error: '+e.message);}requestAnimationFrame(loop);})(last);}
+if(typeof document!=='undefined'&&document.getElementById('view'))boot();
+</script>
+</body>
+</html>
